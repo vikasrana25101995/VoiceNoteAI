@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  folders      Folder[]
+  notes        Note[]
+  tasks        Task[]
+  chatMessages ChatMessage[]
+}
+
+model Folder {
+  id        String   @id @default(uuid())
+  name      String
+  color     String?  // hex or tailwind class name
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  notes     Note[]
+
+  @@unique([name, userId])
+}
+
+model Note {
+  id           String        @id @default(uuid())
+  title        String
+  content      String        @db.Text // full transcript
+  summary      String?       @db.Text
+  bulletPoints String?       @db.Text // bullet points summary
+  actionItems  String?       @db.Text // action items summary
+  audioUrl     String?
+  duration     Int?          // audio duration in seconds
+  tags         String[]      // tags list (PostgreSQL specific)
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folderId     String?
+  folder       Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  tasks        Task[]
+  chatMessages ChatMessage[]
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  content     String
+  dueDate     DateTime?
+  isCompleted Boolean   @default(false)
+  noteId      String
+  note        Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  query     String   @db.Text
+  response  String   @db.Text
+  noteId    String?
+  note      Note?    @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
