@@ -8,6 +8,7 @@ export {
   Clock, 
   Tag, 
   Folder, 
+  Folder as FolderIcon,
   Calendar, 
   Loader2, 
   Volume2, 
@@ -21,5 +22,8 @@ export {
   Plus,
   Wand2,
   ListTodo,
-  MessageSquareShare
+  MessageSquareShare,
+  CheckSquare,
+  Send,
+  Square
 } from 'lucide-react';

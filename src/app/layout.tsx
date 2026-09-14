@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Sora, Instrument_Serif } from 'next/font/google';
 import './globals.css';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const sora = Sora({
   subsets: ['latin'],
+  variable: '--font-sora',
 });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const instrumentSerif = Instrument_Serif({
+  weight: ['400'],
   subsets: ['latin'],
+  style: ['normal', 'italic'],
+  variable: '--font-instrument-serif',
 });
 
 export const metadata: Metadata = {
@@ -26,10 +28,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${sora.variable} ${instrumentSerif.variable} font-sans h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-[#07070e] text-white" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col bg-[#FAFAF8] text-neutral-900 font-sans" suppressHydrationWarning>
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

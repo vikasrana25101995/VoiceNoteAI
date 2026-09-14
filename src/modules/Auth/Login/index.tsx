@@ -166,16 +166,12 @@ export function LoginModule() {
                 </span>
               </label>
 
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert('Password reset link has been sent to your email if registered.');
-                }}
+              <Link
+                href="/forgot-password"
                 className="text-xs sm:text-sm font-semibold text-[#234B36] hover:underline"
               >
                 {LOGIN_CONSTANTS.FORGOT_PASSWORD_LINK}
-              </a>
+              </Link>
             </div>
 
             {/* Submit Button */}

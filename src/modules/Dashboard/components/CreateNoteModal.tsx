@@ -189,14 +189,37 @@ export default function CreateNoteModal({
               />
             </div>
 
-            {/* Folder Selector */}
+            {/* Folder / Category Selector */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Folder Category
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Folder Category
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const customName = prompt('New Category/Folder name:');
+                    if (customName && customName.trim()) {
+                      fetch('/api/folders', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: customName.trim() }),
+                      })
+                        .then((res) => res.json())
+                        .then((newF) => {
+                          if (newF?.id) setSelectedFolderId(newF.id);
+                        });
+                    }
+                  }}
+                  className="text-[11px] text-[#635BFF] font-semibold hover:underline cursor-pointer"
+                >
+                  + New Category
+                </button>
+              </div>
+
               <Select value={selectedFolderId} onValueChange={(val) => setSelectedFolderId(val || '')}>
                 <SelectTrigger className="bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs rounded-xl h-10">
-                  <SelectValue placeholder="Select a folder..." />
+                  <SelectValue placeholder="Select a category..." />
                 </SelectTrigger>
                 <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
                   <SelectItem value="unassigned">Unassigned</SelectItem>

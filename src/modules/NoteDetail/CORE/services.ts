@@ -4,10 +4,10 @@ export class NoteDetailService {
   async fetchNote(id: string): Promise<Note | null> {
     try {
       const res = await fetch(`/api/notes/${id}`);
-      if (!res.ok) throw new Error('Failed to fetch note details');
+      if (!res.ok) return null;
       return res.json();
     } catch (error) {
-      console.error('Service error fetching note detail:', error);
+      console.warn('Could not fetch note detail:', error);
       return null;
     }
   }

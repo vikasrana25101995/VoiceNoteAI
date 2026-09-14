@@ -28,9 +28,9 @@ export const AuthSidebar: React.FC<AuthSidebarProps> = ({ type }) => {
       <div className="relative z-10 my-auto py-12 max-w-md">
         {type === 'login' ? (
           <div>
-            <h1 className="text-4xl sm:text-5xl font-light tracking-tight leading-[1.15] text-white font-sans">
+            <h1 className="text-4xl sm:text-5xl font-normal tracking-tight leading-[1.15] text-white font-serif">
               Say it out loud.{' '}
-              <span className="italic font-serif block font-normal text-[#B5D7C3] mt-1">
+              <span className="italic block font-normal text-[#B5D7C3] mt-1">
                 We&apos;ll write it down.
               </span>
             </h1>
@@ -55,9 +55,9 @@ export const AuthSidebar: React.FC<AuthSidebarProps> = ({ type }) => {
           </div>
         ) : (
           <div>
-            <h1 className="text-4xl sm:text-5xl font-light tracking-tight leading-[1.15] text-white font-sans">
+            <h1 className="text-4xl sm:text-5xl font-normal tracking-tight leading-[1.15] text-white font-serif">
               Start with a thought.{' '}
-              <span className="italic font-serif block font-normal text-[#B5D7C3] mt-1">
+              <span className="italic block font-normal text-[#B5D7C3] mt-1">
                 Not a blank page.
               </span>
             </h1>

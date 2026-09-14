@@ -21,6 +21,9 @@ export interface Note {
   userId: string;
   folderId?: string | null;
   folder?: Folder | null;
+  isFavorite?: boolean;
+  isArchived?: boolean;
+  type?: 'voice' | 'type';
   createdAt: string;
   updatedAt: string;
 }

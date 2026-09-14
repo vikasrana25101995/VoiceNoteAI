@@ -50,16 +50,16 @@ class MemoryDatabase {
   private notes: Note[] = [
     {
       id: 'note-1',
-      title: 'Project Team Sync',
-      content: 'The team is one step behind on the dashboard because database migrations aren\'t done. John takes the migrations, Sarah continues on components once seeding lands, and the review moves to Friday to give QA a full day.\n\nMigrations + seeding are the critical path — everything else waits on them.\nReview session moved from Wednesday to Friday 3 PM.\nQA gets a full day before the demo; no scope added this sprint.',
-      summary: 'The team is one step behind on the dashboard because database migrations aren\'t done. John takes the migrations, Sarah continues on components once seeding lands, and the review moves to Friday to give QA a full day.',
-      bulletPoints: '• Migrations + seeding are the critical path — everything else waits on them.\n• Review session moved from Wednesday to Friday 3 PM.\n• QA gets a full day before the demo; no scope added this sprint.',
-      actionItems: 'John: complete database migrations and seeding\nMove review session to Friday 3 PM\nSarah: finalize dashboard components',
-      tags: ['Meetings', 'Dashboard', 'Sprint'],
-      duration: 752, // 12m 32s
+      title: 'Investor update — September',
+      content: 'Revenue is up 18% month over month, which puts us slightly ahead of the plan we shared in July. Churn held flat at 2.1% — not moving, but not getting worse either.\n\nThe thing I keep coming back to is hiring. We need two more people on the transcription team before Q4 or the accuracy work slips into next year, and that pushes the enterprise conversations out with it.\n\nOn pricing: the team wants to test a usage-based tier for heavy voice users. I\'d rather wait until we have a full quarter of retention data on the current plans before we complicate the page.',
+      summary: 'Growth is ahead of plan at 18% MoM with flat churn. The binding constraint is transcription hiring before Q4; a usage-based pricing test is proposed but deferred pending retention data.',
+      bulletPoints: '• Open two transcription roles before Q4\n• Pull a full quarter of retention data\n• Hold the usage-based pricing test until October',
+      actionItems: 'Open two transcription roles before Q4\nPull a full quarter of retention data\nHold the usage-based pricing test until October',
+      tags: ['Work'],
+      duration: 752,
       userId: 'default-user-id',
       folderId: 'folder-meetings',
-      createdAt: new Date().toISOString(), // Today 9:40 AM
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
     {

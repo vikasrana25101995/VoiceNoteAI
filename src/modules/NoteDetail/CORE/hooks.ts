@@ -26,6 +26,8 @@ export function useNoteDetail(noteId: string | null, onNoteUpdated?: () => void)
       setEditedContent(data.content);
       setEditedSummary(data.summary || '');
       setRewrittenText('');
+    } else {
+      setNote(null);
     }
     setLoading(false);
   };

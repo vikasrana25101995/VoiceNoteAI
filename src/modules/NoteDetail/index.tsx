@@ -3,35 +3,35 @@
 import { useNoteDetail } from './CORE/hooks';
 import { NoteDetailActions } from './CORE/actions';
 import { REWRITE_MODES } from './CORE/constants';
-import { 
-  useState,
-  useEffect,
-  useRef,
-  Sparkles, 
-  Trash, 
-  Copy, 
-  Check, 
-  Clock, 
-  Tag, 
-  Folder as FolderIcon, 
-  Loader2, 
-  Play, 
+import { useState, useEffect, useRef } from 'react';
+import {
+  Sparkles,
+  Trash,
+  Copy,
+  Check,
+  Clock,
+  Tag,
+  Folder as FolderIcon,
+  Loader2,
+  Play,
   Pause,
   Download,
   X,
+  Plus,
   Wand2,
   ListTodo,
   FileText,
   Share2,
-  MessageSquareShare
-} from './CORE/imports';
+  CheckSquare,
+  Send,
+  Square,
+  MessageSquare
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { noteDetailService } from './CORE/services';
 
 interface NoteDetailProps {
   noteId: string | null;
@@ -41,455 +41,1091 @@ interface NoteDetailProps {
   onOpenCopilot?: () => void;
 }
 
-// Waveform bar height multipliers to mimic realistic audio spectrum
-const WAVEFORM_BAR_HEIGHTS = [
-  35, 60, 45, 80, 95, 70, 85, 40, 60, 75, 
-  90, 65, 45, 80, 100, 85, 70, 50, 65, 80, 
-  95, 60, 40, 75, 90, 55, 35, 65, 80, 60, 
-  45, 70, 85, 50, 40, 65, 55, 35, 45, 30
-];
+interface ChatMessageItem {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+}
 
-export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNote, onOpenCopilot }: NoteDetailProps) {
+export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNote }: NoteDetailProps) {
   const state = useNoteDetail(noteId, onNoteUpdated);
   const actions = new NoteDetailActions(state);
 
-  const { 
-    note, 
-    loading, 
-    isEditing, 
-    editedTitle, 
-    setEditedTitle, 
-    editedContent, 
-    setEditedContent, 
-    editedSummary, 
+  const {
+    note,
+    loading,
+    isEditing,
+    setIsEditing,
+    editedTitle,
+    setEditedTitle,
+    editedContent,
+    setEditedContent,
+    editedSummary,
     setEditedSummary,
-    activeTab, 
-    rewriteMode, 
-    rewrittenText, 
-    rewriting, 
-    saving 
+    saveNoteChanges,
+    saving
   } = state;
 
-  const [copied, setCopied] = useState(false);
-  const [copiedSummary, setCopiedSummary] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackTime, setPlaybackTime] = useState(188); // Default to ~3:08 to match mockup if note duration exists
-  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Assistant & Chat State
+  const [isAssistantOpen, setIsAssistantOpen] = useState(true);
+  const [assistantInput, setAssistantInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [aiActionLoading, setAiActionLoading] = useState<string | null>(null);
 
+  // Interactive Action Items & To-dos State
+  const [completedActions, setCompletedActions] = useState<Record<number, boolean>>({});
+  const [newTodoInput, setNewTodoInput] = useState('');
+  const [isAddingTodo, setIsAddingTodo] = useState(false);
+  const [isExtractingTodos, setIsExtractingTodos] = useState(false);
+  const [isTodoMode, setIsTodoMode] = useState(false);
+  const [newCanvasTodoText, setNewCanvasTodoText] = useState('');
+  const [addType, setAddType] = useState<'item' | 'heading'>('item');
+  const [keepWritingText, setKeepWritingText] = useState('');
+
+  // Tags State
+  const [tags, setTags] = useState<string[]>(['Work']);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [isAddingTag, setIsAddingTag] = useState(false);
+
+  // Dynamic Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync state when active note changes
   useEffect(() => {
-    // Reset playback to simulated 3:08 or 0 on note change
-    setPlaybackTime(note?.duration ? Math.min(188, note.duration) : 0);
-    setIsPlaying(false);
-    if (playbackIntervalRef.current) {
-      clearInterval(playbackIntervalRef.current);
-      playbackIntervalRef.current = null;
+    if (note) {
+      setTags(note.tags || []);
+      setCompletedActions({});
+      setChatMessages([]);
     }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+  }, [noteId, note]);
+
+  // Audio Recording Timer
+  useEffect(() => {
+    if (isRecording) {
+      setRecordingSeconds(0);
+      timerIntervalRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
     }
     return () => {
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
       }
     };
-  }, [noteId]);
-
-  const togglePlay = () => {
-    if (note && note.audioUrl) {
-      if (!audioRef.current) {
-        audioRef.current = new Audio(note.audioUrl);
-        audioRef.current.addEventListener('timeupdate', () => {
-          if (audioRef.current) {
-            setPlaybackTime(Math.floor(audioRef.current.currentTime));
-          }
-        });
-        audioRef.current.addEventListener('ended', () => {
-          setIsPlaying(false);
-          setPlaybackTime(0);
-        });
-      }
-
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        audioRef.current.play().catch((err) => {
-          console.error('Audio play error:', err);
-          setIsPlaying(false);
-        });
-        setIsPlaying(true);
-      }
-    } else {
-      // Simulation fallback for mock notes
-      if (isPlaying) {
-        if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
-        setIsPlaying(false);
-      } else {
-        setIsPlaying(true);
-        playbackIntervalRef.current = setInterval(() => {
-          setPlaybackTime((prev) => {
-            if (note && note.duration && prev >= note.duration) {
-              setIsPlaying(false);
-              if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
-              return 0;
-            }
-            return prev + 1;
-          });
-        }, 1000);
-      }
-    }
-  };
-
-  const handleWavebarClick = (index: number) => {
-    if (!note?.duration) return;
-    const fraction = (index + 1) / WAVEFORM_BAR_HEIGHTS.length;
-    const newTime = Math.floor(fraction * note.duration);
-    setPlaybackTime(newTime);
-    if (audioRef.current) {
-      audioRef.current.currentTime = newTime;
-    }
-  };
+  }, [isRecording]);
 
   if (!noteId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
-        <FileText className="w-12 h-12 mb-3 stroke-[1.5] text-slate-300 dark:text-slate-600" />
-        <h4 className="font-bold text-slate-600 dark:text-slate-300 text-lg">No Note Selected</h4>
-        <p className="text-sm max-w-xs mt-1 text-slate-400 dark:text-slate-500">Select a note from the dashboard to view summaries, transcripts, and AI tasks.</p>
+      <div className="h-full flex flex-col items-center justify-center text-neutral-400 p-8 text-center bg-white rounded-2xl border border-neutral-200 shadow-xs">
+        <FileText className="w-12 h-12 mb-3 stroke-[1.5] text-neutral-300" />
+        <h4 className="font-bold text-neutral-600 text-lg">No Note Selected</h4>
+        <p className="text-sm max-w-xs mt-1 text-neutral-400">Select a note from the list to view and edit.</p>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
-        <span className="text-sm font-semibold">Loading note analysis...</span>
+      <div className="h-full flex flex-col items-center justify-center text-neutral-500 bg-white rounded-2xl border border-neutral-200">
+        <Loader2 className="w-8 h-8 animate-spin text-[#234B36] mb-2" />
+        <span className="text-sm font-semibold">Loading note...</span>
       </div>
     );
   }
 
   if (!note) return null;
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const wordCount = (editedContent || note.content || '').trim().split(/\s+/).filter(Boolean).length;
+
+  const formattedDate = note.createdAt
+    ? new Date(note.createdAt).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    : 'Today';
+
+  // Derive action items list dynamically from note without dummy fallbacks
+  const rawActions = note.actionItems || note.bulletPoints || '';
+  const dynamicActionItems: string[] = rawActions
+    ? rawActions
+      .split('\n')
+      .map((s) => s.replace(/^[•\-\*]\s*/, '').trim())
+      .filter(Boolean)
+    : [];
+
+  const toggleActionItem = (idx: number) => {
+    setCompletedActions((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
 
-  const copySummaryText = () => {
-    if (!note.summary) return;
-    navigator.clipboard.writeText(note.summary);
-    setCopiedSummary(true);
-    setTimeout(() => setCopiedSummary(false), 2000);
+  const handleAddTag = async () => {
+    if (newTagInput.trim() && !tags.includes(newTagInput.trim())) {
+      const updatedTags = [...tags, newTagInput.trim()];
+      setTags(updatedTags);
+      setNewTagInput('');
+      setIsAddingTag(false);
+      await noteDetailService.updateNote(note.id, { tags: updatedTags });
+      if (onNoteUpdated) onNoteUpdated();
+    }
   };
 
-  const downloadMarkdown = () => {
-    const mdContent = `
-# ${note.title}
-Date: ${new Date(note.createdAt).toLocaleDateString()}
-
-## Summary
-${note.summary || 'No summary available.'}
-
-## Key Takeaways
-${note.bulletPoints || 'No bullet points generated.'}
-
-## Action Items
-${note.actionItems || 'No action items extracted.'}
-
-## Transcript
-${note.content}
-    `.trim();
-
-    const blob = new Blob([mdContent], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${note.title.toLowerCase().replace(/\s+/g, '-')}.md`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleRemoveTag = async (tagToRemove: string) => {
+    const updatedTags = tags.filter((t) => t !== tagToRemove);
+    setTags(updatedTags);
+    await noteDetailService.updateNote(note.id, { tags: updatedTags });
+    if (onNoteUpdated) onNoteUpdated();
   };
 
-  const formatMinSec = (seconds?: number | null) => {
-    if (!seconds) return '0:00';
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+  // Dynamic Audio Recording Trigger
+  const handleToggleRecord = async () => {
+    if (isRecording) {
+      // Stop recording
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecording(false);
+    } else {
+      // Start recording via Web Audio API
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunksRef.current = [];
+        const recorder = new MediaRecorder(stream);
+
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((track) => track.stop());
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+          setIsTranscribing(true);
+          try {
+            const formData = new FormData();
+            formData.append('file', audioBlob, 'audio.webm');
+
+            const headers: Record<string, string> = {};
+            if (typeof window !== 'undefined') {
+              const openAIKey = localStorage.getItem('openai_api_key');
+              if (openAIKey) headers['x-openai-api-key'] = openAIKey;
+              const geminiKey = localStorage.getItem('gemini_api_key');
+              if (geminiKey) headers['x-gemini-api-key'] = geminiKey;
+            }
+
+            const res = await fetch('/api/transcribe', {
+              method: 'POST',
+              headers,
+              body: formData,
+            });
+
+            const data = await res.json();
+            const transcribedText = data.text || 'Recorded audio note.';
+            const newContent = (editedContent ? editedContent + '\n\n' : '') + transcribedText;
+            setEditedContent(newContent);
+            await noteDetailService.updateNote(note.id, { content: newContent });
+            if (onNoteUpdated) onNoteUpdated();
+
+            // Auto-trigger analysis for summary and action items if missing
+            try {
+              const analyzeRes = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...headers },
+                body: JSON.stringify({ transcript: newContent }),
+              });
+              if (analyzeRes.ok) {
+                const analyzed = await analyzeRes.json();
+                if (analyzed.summary || analyzed.actionItems) {
+                  const updatePayload: Record<string, any> = {};
+                  if (analyzed.summary) {
+                    updatePayload.summary = analyzed.summary;
+                    setEditedSummary(analyzed.summary);
+                  }
+                  if (analyzed.actionItems && Array.isArray(analyzed.actionItems)) {
+                    updatePayload.actionItems = analyzed.actionItems.join('\n');
+                  }
+                  await noteDetailService.updateNote(note.id, updatePayload);
+                  if (onNoteUpdated) onNoteUpdated();
+                }
+              }
+            } catch (aErr) {
+              console.error('Auto-analyze after recording error:', aErr);
+            }
+          } catch (err) {
+            console.error('Transcription error:', err);
+            alert('Failed to process audio recording.');
+          } finally {
+            setIsTranscribing(false);
+          }
+        };
+
+        recorder.start();
+        mediaRecorderRef.current = recorder;
+        setIsRecording(true);
+      } catch (err) {
+        console.error('Microphone access error:', err);
+        alert('Microphone access is required for voice recording.');
+      }
+    }
   };
 
-  const selectedRewritePreset = REWRITE_MODES.find(m => m.id === rewriteMode);
-  const durationTotal = note.duration || 752; // default 12m 32s
-  const progressRatio = Math.min(1, playbackTime / durationTotal);
-  const activeBarCount = Math.floor(progressRatio * WAVEFORM_BAR_HEIGHTS.length);
+  // Extract To-dos / Action Items with AI
+  const handleExtractTodos = async () => {
+    setIsAssistantOpen(true);
+    setIsExtractingTodos(true);
+    try {
+      const textToAnalyze = editedContent || note.content || note.title;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (typeof window !== 'undefined') {
+        const openAIKey = localStorage.getItem('openai_api_key');
+        if (openAIKey) headers['x-openai-api-key'] = openAIKey;
+        const geminiKey = localStorage.getItem('gemini_api_key');
+        if (geminiKey) headers['x-gemini-api-key'] = geminiKey;
+      }
+
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ transcript: textToAnalyze }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.actionItems && Array.isArray(data.actionItems)) {
+          const formattedActions = data.actionItems.join('\n');
+          await noteDetailService.updateNote(note.id, { actionItems: formattedActions });
+          note.actionItems = formattedActions;
+
+          if (isTodoMode) {
+            const newLines = data.actionItems.map((item: string) => `- [ ] ${item}`).join('\n');
+            const updatedContent = editedContent ? `${editedContent}\n${newLines}` : newLines;
+            setEditedContent(updatedContent);
+            await noteDetailService.updateNote(note.id, { content: updatedContent });
+          }
+
+          if (onNoteUpdated) onNoteUpdated();
+        }
+      }
+    } catch (err) {
+      console.error('Error extracting to-dos:', err);
+    } finally {
+      setIsExtractingTodos(false);
+    }
+  };
+
+  // Add custom to-do item manually
+  const handleAddCustomTodo = async () => {
+    if (!newTodoInput.trim()) return;
+    const currentList = rawActions ? rawActions.split('\n').filter(Boolean) : [];
+    const updatedList = [...currentList, newTodoInput.trim()];
+    const updatedActionItems = updatedList.join('\n');
+    setNewTodoInput('');
+    setIsAddingTodo(false);
+    await noteDetailService.updateNote(note.id, { actionItems: updatedActionItems });
+    note.actionItems = updatedActionItems;
+    if (onNoteUpdated) onNoteUpdated();
+  };
+
+  // Dynamic AI Transformation Actions ("DO MORE")
+  const handleDoMoreAction = async (actionLabel: string) => {
+    setAiActionLoading(actionLabel);
+    try {
+      let mode = 'tidy';
+      let prompt = actionLabel;
+
+      if (actionLabel === 'Tidy up transcript') {
+        mode = 'tidy';
+        prompt = 'Clean up filler words, fix grammar and format as a clean transcript.';
+      } else if (actionLabel === 'Shorter') {
+        mode = 'shorter';
+        prompt = 'Make this note text concise and shorter.';
+      } else if (actionLabel === 'Suggest a title') {
+        mode = 'title';
+        prompt = 'Suggest a clear, professional headline title for this note.';
+      } else if (actionLabel === 'Draft an email') {
+        mode = 'email';
+        prompt = 'Draft a professional email update based on this note.';
+      }
+
+      const result = await noteDetailService.runRewrite(note.id, mode, prompt);
+      if (result) {
+        if (actionLabel === 'Suggest a title') {
+          const cleanTitle = result.replace(/^["']|["']$/g, '').trim();
+          setEditedTitle(cleanTitle);
+          await noteDetailService.updateNote(note.id, { title: cleanTitle });
+        } else {
+          setEditedContent(result);
+          await noteDetailService.updateNote(note.id, { content: result });
+        }
+        if (onNoteUpdated) onNoteUpdated();
+      }
+    } catch (err: any) {
+      alert(err.message || 'AI action failed.');
+    } finally {
+      setAiActionLoading(null);
+    }
+  };
+
+  // Dynamic AI Chat Question Submission
+  const handleSendAssistantChat = async () => {
+    if (!assistantInput.trim() || isAiThinking) return;
+
+    const userQuery = assistantInput.trim();
+    setAssistantInput('');
+
+    const userMessage: ChatMessageItem = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: userQuery,
+    };
+
+    setChatMessages((prev) => [...prev, userMessage]);
+    setIsAiThinking(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          noteId: note.id,
+          query: userQuery,
+        }),
+      });
+
+      const data = await res.json();
+      const aiResponse = data.response || 'I have analyzed your note regarding this query.';
+
+      const aiMessage: ChatMessageItem = {
+        id: (Date.now() + 1).toString(),
+        sender: 'ai',
+        text: aiResponse,
+      };
+
+      setChatMessages((prev) => [...prev, aiMessage]);
+    } catch (err) {
+      console.error('AI chat error:', err);
+    } finally {
+      setIsAiThinking(false);
+    }
+  };
+
+  const formatRecTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Count completed and total todo items for To-do mode header
+  const allContentLines = (editedContent || '').split('\n').filter((l) => l.trim().length > 0);
+  const todoItemsOnly = allContentLines.filter((l) => !/^(#{1,6}\s|\[heading\]|\[section\])/i.test(l.trim()));
+  const totalTodoCount = todoItemsOnly.length;
+  const completedTodoCount = todoItemsOnly.filter((l) => /^(- \[[xX]\]|\[[xX]\])/.test(l.trim())).length;
+
+  const handleAppendTextFromBottom = () => {
+    if (!keepWritingText.trim()) return;
+    const newContent = editedContent
+      ? `${editedContent}\n\n${keepWritingText.trim()}`
+      : keepWritingText.trim();
+    setEditedContent(newContent);
+    setKeepWritingText('');
+    noteDetailService.updateNote(note.id, { content: newContent });
+    if (onNoteUpdated) onNoteUpdated();
+  };
+
+  const handleAddTodoFromBottom = () => {
+    if (!newCanvasTodoText.trim()) return;
+    const lineToAdd = addType === 'heading'
+      ? `## ${newCanvasTodoText.trim()}`
+      : `- [ ] ${newCanvasTodoText.trim()}`;
+
+    const lines = (editedContent || '').split('\n').filter(Boolean);
+    lines.push(lineToAdd);
+    const updated = lines.join('\n');
+    setEditedContent(updated);
+    setNewCanvasTodoText('');
+    noteDetailService.updateNote(note.id, { content: updated });
+    if (onNoteUpdated) onNoteUpdated();
+  };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs relative text-slate-800 dark:text-slate-100">
-      
-      {/* Scrollable Content Container */}
-      <ScrollArea className="flex-1 p-6 md:p-8">
-        <div className="max-w-3xl mx-auto space-y-6">
-          
-          {/* Metadata Breadcrumb Line */}
-          <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{note.folder?.name || 'Meetings'}</span>
-              <span>Today, 9:40 AM</span>
-              <span>·</span>
-              <span>12 min 32 sec</span>
-              <span>·</span>
-              <span>English</span>
-            </div>
-            {onClose && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                className="h-7 w-7 text-slate-400 hover:text-slate-700 dark:hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
+    <div className="w-full h-full flex flex-col bg-white border border-neutral-200/80 rounded-2xl overflow-hidden shadow-xs text-neutral-900">
 
-          {/* Note Title */}
-          <div>
-            {isEditing ? (
-              <Input
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                className="text-2xl font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-5"
-                placeholder="Enter title..."
-              />
-            ) : (
-              <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">{note.title}</h1>
-            )}
-          </div>
+      {/* TOP BAR HEADER (Crisp White Background) */}
+      <div className="h-14 px-6 border-b border-neutral-200/70 flex items-center justify-between bg-white shrink-0">
+        {/* Left Status */}
+        <div className="flex items-center gap-2 text-xs text-neutral-500 font-normal">
+          <span className={`w-2 h-2 rounded-full ${saving ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
+          <span>{saving ? 'Saving changes...' : 'All changes saved'}</span>
+        </div>
 
-          {/* Audio Equalizer Playbar (Matching Mockup) */}
-          <div className="bg-slate-50/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-xs">
-            {/* Round Purple Play/Pause Button */}
+        {/* Right Action Buttons */}
+        <div className="flex items-center gap-2">
+
+          {/* Share Button */}
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              alert('Note link copied to clipboard!');
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition-all cursor-pointer shadow-2xs"
+          >
+            <Share2 className="w-3.5 h-3.5 text-neutral-500" />
+            <span>Share</span>
+          </button>
+
+          {/* Assistant Toggle Button */}
+          <button
+            onClick={() => setIsAssistantOpen(!isAssistantOpen)}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs ${isAssistantOpen
+              ? 'bg-[#234B36] text-white hover:bg-[#1A3A2A]'
+              : 'bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-50'
+              }`}
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Assistant</span>
+          </button>
+
+          {onClose && (
             <button
-              onClick={togglePlay}
-              className="w-11 h-11 rounded-full bg-[#635BFF] hover:bg-[#5249ea] text-white flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0 transition-transform active:scale-95 cursor-pointer"
+              onClick={onClose}
+              className="p-1.5 text-neutral-400 hover:text-neutral-700 rounded-lg transition-colors ml-1"
             >
-              {isPlaying ? (
-                <Pause className="w-5 h-5 fill-white text-white" />
-              ) : (
-                <Play className="w-5 h-5 fill-white text-white ml-0.5" />
-              )}
+              <X className="w-4 h-4" />
             </button>
+          )}
+        </div>
+      </div>
 
-            {/* Time Elapsed Readout */}
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 font-mono shrink-0 w-9">
-              {formatMinSec(playbackTime)}
-            </span>
+      {/* MAIN SPLIT CONTENT AREA */}
+      <div className="flex-1 flex overflow-hidden min-h-0 bg-white">
 
-            {/* Animated Wavebar Graphic */}
-            <div className="flex-1 h-10 flex items-center justify-between gap-[3px] px-1 cursor-pointer">
-              {WAVEFORM_BAR_HEIGHTS.map((heightPercent, idx) => {
-                const isActive = idx <= activeBarCount;
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => handleWavebarClick(idx)}
-                    className="flex-1 flex items-center justify-center h-full group focus:outline-none cursor-pointer"
-                  >
-                    <span
-                      className={`w-full rounded-full transition-all duration-150 ${
-                        isActive 
-                          ? 'bg-[#635BFF] dark:bg-indigo-400' 
-                          : 'bg-slate-200 dark:bg-slate-700 group-hover:bg-slate-300'
-                      }`}
-                      style={{ height: `${heightPercent}%` }}
-                    />
-                  </button>
-                );
-              })}
-            </div>
+        {/* MAIN EDITOR CANVAS (Left Pane - Soft Warm Ivory `#FAFAF8`) */}
+        <div className="flex-1 flex flex-col relative overflow-hidden bg-[#FAFAF8]">
+          <ScrollArea className="flex-1 p-8 md:p-12 pb-32">
+            <div className="max-w-3xl space-y-6">
 
-            {/* Total Duration Readout */}
-            <span className="text-xs font-semibold text-slate-400 font-mono shrink-0 w-9 text-right">
-              {formatMinSec(durationTotal)}
-            </span>
-          </div>
-
-          {/* Navigation Pill Tabs */}
-          <Tabs value={activeTab} onValueChange={(v) => actions.handleTabChange(v as any)} className="w-full">
-            <div className="bg-slate-100/80 dark:bg-slate-800/60 p-1 rounded-xl inline-flex gap-1 mb-4 border border-slate-200/50 dark:border-slate-700/50">
-              <button
-                onClick={() => actions.handleTabChange('summary')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  activeTab === 'summary'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                Summary
-              </button>
-              <button
-                onClick={() => actions.handleTabChange('transcript')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  activeTab === 'transcript'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                Transcript
-              </button>
-              <button
-                onClick={() => actions.handleTabChange('tasks')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                  activeTab === 'tasks'
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                }`}
-              >
-                Tasks
-              </button>
-            </div>
-
-            {/* TAB CONTENT: SUMMARY (Mockup AI Summary Box) */}
-            <TabsContent value="summary" className="mt-0 space-y-5">
-              <div className="bg-[#F2F5FE] dark:bg-indigo-950/40 border border-indigo-100/80 dark:border-indigo-900/40 rounded-2xl p-6 space-y-4 shadow-xs">
-                <div className="text-[11px] font-extrabold uppercase tracking-widest text-[#4338CA] dark:text-indigo-400">
-                  AI SUMMARY
-                </div>
-
+              {/* Document Title (Serif Display Font - Instrument Serif with Fixed Width) */}
+              <div className="w-full min-w-0 max-w-full overflow-hidden">
                 {isEditing ? (
-                  <Textarea
-                    value={editedSummary}
-                    onChange={(e) => setEditedSummary(e.target.value)}
-                    className="min-h-32 bg-white dark:bg-slate-900 border-indigo-200 dark:border-indigo-800 text-slate-800 dark:text-slate-100"
+                  <Input
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    onBlur={saveNoteChanges}
+                    onKeyDown={(e) => e.key === 'Enter' && saveNoteChanges()}
+                    className="w-full text-3xl md:text-4xl font-serif bg-white border border-neutral-200 text-neutral-900 rounded-xl py-3 px-4 focus-visible:ring-1 focus-visible:ring-[#234B36]"
+                    placeholder="Note title..."
                   />
                 ) : (
-                  <>
-                    <p className="text-slate-700 dark:text-slate-200 leading-relaxed text-[14px]">
-                      {note.summary || 'The team is one step behind on the dashboard because database migrations aren\'t done. John takes the migrations, Sarah continues on components once seeding lands, and the review moves to Friday to give QA a full day.'}
-                    </p>
-
-                    <div className="border-t border-indigo-100/60 dark:border-indigo-900/40 pt-4 space-y-2.5">
-                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#635BFF] mt-1.5 shrink-0" />
-                        <span>Migrations + seeding are the critical path — everything else waits on them.</span>
-                      </div>
-                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#635BFF] mt-1.5 shrink-0" />
-                        <span>Review session moved from Wednesday to Friday 3 PM.</span>
-                      </div>
-                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#635BFF] mt-1.5 shrink-0" />
-                        <span>QA gets a full day before the demo; no scope added this sprint.</span>
-                      </div>
-                    </div>
-                  </>
+                  <h1
+                    onClick={() => setIsEditing(true)}
+                    className="w-full text-3xl md:text-4xl font-serif text-neutral-900 font-normal tracking-tight leading-snug cursor-text hover:text-neutral-800 break-words"
+                  >
+                    {editedTitle || note.title}
+                  </h1>
                 )}
               </div>
 
-              {/* Action Buttons Row */}
-              <div className="flex flex-wrap gap-2.5 pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={copySummaryText}
-                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
-                >
-                  {copiedSummary ? <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" /> : null}
-                  {copiedSummary ? 'Copied summary' : 'Copy summary'}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(window.location.href);
-                    alert('Note link copied to clipboard!');
-                  }}
-                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
-                >
-                  <Share2 className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
-                  Share note
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={downloadMarkdown}
-                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
-                  Export tasks
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onOpenCopilot && onOpenCopilot()}
-                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
-                >
-                  <MessageSquareShare className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
-                  Ask about this note
-                </Button>
+              {/* Metadata Subtitle */}
+              <div className="text-xs text-neutral-400 font-sans font-normal flex items-center gap-1.5">
+                <span>{formattedDate}</span>
+                <span>·</span>
+                <span>{wordCount} words</span>
               </div>
-            </TabsContent>
 
-            {/* TAB CONTENT: TRANSCRIPT */}
-            <TabsContent value="transcript" className="mt-0 space-y-4">
-              <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-xs uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">Full Transcript</h4>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyToClipboard(note.content)}
-                    className="text-slate-500 hover:text-slate-800 dark:hover:text-white h-7 px-2"
+              {/* Category / Folder & Tags Section */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Category Pill */}
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-200/80 bg-emerald-50/50 text-xs font-semibold text-emerald-900 shadow-2xs">
+                  <FolderIcon className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Category: {note.folder?.name || 'Unassigned'}</span>
+                  <button
+                    onClick={async () => {
+                      const catName = prompt('Enter Category/Folder name:');
+                      if (catName !== null && catName.trim()) {
+                        const folderRes = await fetch('/api/folders', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ name: catName.trim() }),
+                        });
+                        const folderObj = await folderRes.json();
+                        if (folderObj?.id) {
+                          await noteDetailService.updateNote(note.id, { folderId: folderObj.id });
+                          if (onNoteUpdated) onNoteUpdated();
+                        }
+                      }
+                    }}
+                    className="text-emerald-700 hover:text-emerald-950 underline ml-1 cursor-pointer font-medium"
+                    title="Change category"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
-                    {copied ? 'Copied' : 'Copy'}
-                  </Button>
+                    Change
+                  </button>
                 </div>
-                {isEditing ? (
+
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-neutral-200 bg-white text-xs font-medium text-neutral-700 shadow-2xs"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                    <span>{tag}</span>
+                    <button
+                      onClick={() => handleRemoveTag(tag)}
+                      className="text-neutral-400 hover:text-neutral-600 ml-0.5 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+
+                {isAddingTag ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newTagInput}
+                      onChange={(e) => setNewTagInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                      placeholder="Tag name..."
+                      className="px-2.5 py-0.5 text-xs rounded-full border border-neutral-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#234B36]"
+                    />
+                    <button
+                      onClick={handleAddTag}
+                      className="text-xs text-[#234B36] font-semibold hover:underline px-1 cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsAddingTag(true)}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full border border-dashed border-neutral-300 bg-white text-xs font-medium text-neutral-500 hover:border-neutral-400 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Tag</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Mode Switcher Segmented Control (≡ Text vs ☑ To-do matching user screenshots) */}
+              <div className="pt-2 pb-1">
+                <div className="inline-flex items-center gap-1 p-1 bg-[#EFEFEA] rounded-xl border border-neutral-200/50">
+                  <button
+                    type="button"
+                    onClick={() => setIsTodoMode(false)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      !isTodoMode
+                        ? 'bg-white text-neutral-900 shadow-2xs'
+                        : 'text-neutral-500 hover:text-neutral-900'
+                    }`}
+                  >
+                    <ListTodo className="w-3.5 h-3.5" />
+                    <span>Text</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsTodoMode(true)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      isTodoMode
+                        ? 'bg-white text-neutral-900 shadow-2xs'
+                        : 'text-neutral-500 hover:text-neutral-900'
+                    }`}
+                  >
+                    <CheckSquare className="w-3.5 h-3.5 text-neutral-700" />
+                    <span>To-do</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-b border-neutral-200/60" />
+
+              {/* Main Canvas Area (To-do Mode vs Text Mode) */}
+              {isTodoMode ? (
+                <div className="space-y-4 pt-1">
+                  {/* Top Bar inside To-do Mode */}
+                  <div className="flex items-center justify-between pb-2">
+                    <span className="text-xs font-medium text-neutral-500">
+                      {completedTodoCount} of {totalTodoCount} done
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleExtractTodos}
+                      disabled={isExtractingTodos}
+                      className="px-3.5 py-1.5 bg-white border border-neutral-200 rounded-xl text-xs font-semibold text-[#234B36] hover:bg-neutral-50 transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1.5 disabled:opacity-60"
+                    >
+                      {isExtractingTodos ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#234B36]" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-[#234B36]" />
+                      )}
+                      <span>Extract to-dos with AI</span>
+                    </button>
+                  </div>
+
+                  {/* Checklist & Headings Container */}
+                  <div className="space-y-2">
+                    {((editedContent || '').split('\n').filter((l) => l.trim().length > 0).length === 0) ? (
+                      <div className="p-8 text-center bg-white border border-dashed border-neutral-200 rounded-2xl text-neutral-400 text-sm italic">
+                        No to-do items yet. Add an item below or extract to-dos from AI!
+                      </div>
+                    ) : (
+                      (editedContent || '').split('\n').map((line, idx) => {
+                        if (!line.trim()) return null;
+
+                        const isHeading = /^(#{1,6}\s|\[heading\]|\[section\])/i.test(line.trim());
+                        if (isHeading) {
+                          const cleanHeading = line.replace(/^(#{1,6}\s|\[heading\]|\[section\])\s*/i, '').trim();
+                          return (
+                            <div key={idx} className="flex items-center gap-3 pt-6 pb-2 border-b border-neutral-200/40 group">
+                              <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-sans">
+                                {cleanHeading}
+                              </span>
+                              <div className="flex-1 h-[1px] bg-neutral-200/40" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const lines = (editedContent || '').split('\n');
+                                  lines.splice(idx, 1);
+                                  const updated = lines.join('\n');
+                                  setEditedContent(updated);
+                                  noteDetailService.updateNote(note.id, { content: updated });
+                                  if (onNoteUpdated) onNoteUpdated();
+                                }}
+                                className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-neutral-600 p-0.5 cursor-pointer"
+                                title="Delete section"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        const isChecked = /^(- \[[xX]\]|\[[xX]\])/.test(line.trim());
+                        const cleanText = line.replace(/^(- \[[xX\s]\]|\[[xX\s]\]|[•\-\*])\s*/, '');
+
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between gap-3 py-1.5 group"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const lines = (editedContent || '').split('\n');
+                                  const targetLine = lines[idx] || '';
+                                  const checked = /^(- \[[xX]\]|\[[xX]\])/.test(targetLine.trim());
+                                  const text = targetLine.replace(/^(- \[[xX\s]\]|\[[xX\s]\]|[•\-\*])\s*/, '');
+                                  lines[idx] = checked ? `- [ ] ${text}` : `- [x] ${text}`;
+                                  const updated = lines.join('\n');
+                                  setEditedContent(updated);
+                                  noteDetailService.updateNote(note.id, { content: updated });
+                                  if (onNoteUpdated) onNoteUpdated();
+                                }}
+                                className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                                  isChecked
+                                    ? 'bg-[#234B36] border-[#234B36] text-white'
+                                    : 'border-neutral-300 bg-white hover:border-neutral-400'
+                                }`}
+                              >
+                                {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                              </button>
+
+                              <input
+                                type="text"
+                                value={cleanText}
+                                onChange={(e) => {
+                                  const lines = (editedContent || '').split('\n');
+                                  lines[idx] = isChecked ? `- [x] ${e.target.value}` : `- [ ] ${e.target.value}`;
+                                  setEditedContent(lines.join('\n'));
+                                }}
+                                onBlur={saveNoteChanges}
+                                className={`w-full bg-transparent text-base font-sans focus:outline-none border-none ${
+                                  isChecked ? 'line-through text-neutral-400' : 'text-neutral-800 font-normal'
+                                }`}
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const lines = (editedContent || '').split('\n');
+                                lines.splice(idx, 1);
+                                const updated = lines.join('\n');
+                                setEditedContent(updated);
+                                noteDetailService.updateNote(note.id, { content: updated });
+                                if (onNoteUpdated) onNoteUpdated();
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-neutral-600 p-1 cursor-pointer"
+                              title="Delete to-do"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Bottom Add Row in To-do mode (Matching Image 1) */}
+                  <div className="flex items-center gap-2 pt-6">
+                    <div className="inline-flex items-center gap-0.5 p-1 bg-[#EFEFEA] rounded-xl border border-neutral-200/60 text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setAddType('item')}
+                        className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                          addType === 'item'
+                            ? 'bg-white text-neutral-900 shadow-2xs font-bold'
+                            : 'text-neutral-500 hover:text-neutral-800 font-medium'
+                        }`}
+                      >
+                        Item
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAddType('heading')}
+                        className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                          addType === 'heading'
+                            ? 'bg-white text-neutral-900 shadow-2xs font-bold'
+                            : 'text-neutral-500 hover:text-neutral-800 font-medium'
+                        }`}
+                      >
+                        Heading
+                      </button>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={newCanvasTodoText}
+                      onChange={(e) => setNewCanvasTodoText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newCanvasTodoText.trim()) {
+                          e.preventDefault();
+                          handleAddTodoFromBottom();
+                        }
+                      }}
+                      placeholder={addType === 'heading' ? 'Section heading' : 'Add a to-do item...'}
+                      className="flex-1 px-4 py-2.5 bg-white border border-neutral-200 rounded-xl text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-[#234B36] shadow-2xs"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleAddTodoFromBottom}
+                      className="px-5 py-2.5 bg-[#234B36] text-white text-sm font-medium rounded-xl hover:bg-[#1A3A2A] transition-colors cursor-pointer shadow-2xs"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Text Mode (Direct Document Editor) */
+                <div className="space-y-6 pt-1">
                   <Textarea
                     value={editedContent}
                     onChange={(e) => setEditedContent(e.target.value)}
-                    className="min-h-64 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-sans text-sm"
+                    onBlur={saveNoteChanges}
+                    placeholder="Keep writing..."
+                    className="w-full min-h-[380px] border-none bg-transparent resize-none p-0 focus-visible:ring-0 text-base leading-relaxed text-neutral-800 font-sans shadow-none placeholder:text-neutral-400"
                   />
-                ) : (
-                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-sm whitespace-pre-wrap">
-                    {note.content}
-                  </p>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* TAB CONTENT: TASKS */}
-            <TabsContent value="tasks" className="mt-0 space-y-4">
-              {note.bulletPoints && (
-                <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
-                  <h4 className="text-xs uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider mb-3">Extracted Action Items</h4>
-                  <ul className="space-y-2.5 text-slate-700 dark:text-slate-300 text-sm">
-                    {note.bulletPoints.split('\n').filter(Boolean).map((pt, idx) => (
-                      <li key={idx} className="flex items-start gap-2 leading-relaxed">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
-                        <span>{pt.replace(/^•\s*/, '')}</span>
-                      </li>
-                    ))}
-                  </ul>
                 </div>
               )}
-            </TabsContent>
-          </Tabs>
 
+            </div>
+          </ScrollArea>
+
+          {/* FLOATING BOTTOM VOICE RECORDING CAPSULE (Centered Pill Widget matching PDF) */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-full max-w-sm px-4">
+            <div className="bg-[#1A1A1A] text-white rounded-full p-2 pl-5 pr-2.5 shadow-2xl flex items-center justify-between border border-white/10 backdrop-blur-md">
+              {/* Equalizer Bars Graphic */}
+              <div className="flex items-center gap-1 h-5">
+                {[50, 80, 40, 100, 70, 90, 60, 45].map((h, i) => (
+                  <div
+                    key={i}
+                    className={`w-1 rounded-full bg-emerald-400 transition-all duration-300 ${isRecording ? 'animate-pulse' : ''
+                      }`}
+                    style={{ height: `${h}%`, animationDelay: `${i * 100}ms` }}
+                  />
+                ))}
+              </div>
+
+              <span className="text-xs font-medium text-white/90">
+                {isTranscribing ? (
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                    Transcribing AI...
+                  </span>
+                ) : isRecording ? (
+                  `Recording (${formatRecTimer(recordingSeconds)})`
+                ) : (
+                  'Tap to record'
+                )}
+              </span>
+
+              <button
+                onClick={handleToggleRecord}
+                disabled={isTranscribing}
+                className="bg-white hover:bg-neutral-100 text-neutral-900 text-xs font-semibold px-4 py-2 rounded-full transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+              >
+                {isRecording ? 'Stop' : 'Record'}
+              </button>
+            </div>
+          </div>
         </div>
-      </ScrollArea>
 
+        {/* ASSISTANT SIDE PANEL (Right Split View with Dynamic AI Responses) */}
+        {isAssistantOpen && (
+          <aside className="w-80 md:w-96 bg-[#F7F7F4] border-l border-neutral-200/80 flex flex-col shrink-0">
+
+            {/* Assistant Panel Header */}
+            <div className="p-5 border-b border-neutral-200/60 flex items-center justify-between bg-[#F7F7F4]">
+              <h3 className="font-semibold text-neutral-900 text-base">
+                Assistant
+              </h3>
+              <button
+                onClick={() => setIsAssistantOpen(false)}
+                className="text-neutral-400 hover:text-neutral-700 p-1 rounded-md transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Assistant Content */}
+            <ScrollArea className="flex-1 p-5 space-y-6">
+              <div className="space-y-6">
+
+                {/* Section 1: SUMMARY */}
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">
+                    SUMMARY
+                  </h4>
+                  <div className="bg-white p-4 rounded-2xl border border-neutral-200/80 shadow-2xs text-xs sm:text-sm text-neutral-800 leading-relaxed font-sans">
+                    {(editedSummary || note.summary) ? (
+                      editedSummary || note.summary
+                    ) : (
+                      <span className="text-neutral-400 italic">No summary generated for this note yet.</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Section 2: ACTION ITEMS */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                      ACTION ITEMS
+                    </h4>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={handleExtractTodos}
+                        disabled={isExtractingTodos}
+                        className="text-[11px] text-[#234B36] font-semibold hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {isExtractingTodos ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3 text-[#234B36]" />
+                        )}
+                        <span>Extract AI</span>
+                      </button>
+                      <button
+                        onClick={() => setIsAddingTodo(!isAddingTodo)}
+                        className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors cursor-pointer"
+                        title="Add action item"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {isAddingTodo && (
+                    <div className="mb-3 flex items-center gap-2">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={newTodoInput}
+                        onChange={(e) => setNewTodoInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddCustomTodo()}
+                        placeholder="Add a new action item..."
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-neutral-300 bg-white focus:outline-none focus:ring-1 focus:ring-[#234B36] shadow-2xs"
+                      />
+                      <button
+                        onClick={handleAddCustomTodo}
+                        className="px-3 py-2 bg-[#234B36] text-white text-xs font-semibold rounded-xl hover:bg-[#1A3A2A] transition-colors cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {dynamicActionItems.length === 0 ? (
+                      <div className="bg-white p-4 rounded-2xl border border-neutral-200/80 shadow-2xs text-xs text-neutral-400 font-sans italic text-center space-y-2">
+                        <p>No action items found for this note.</p>
+                        <button
+                          onClick={handleExtractTodos}
+                          disabled={isExtractingTodos}
+                          className="px-3 py-1.5 bg-[#234B36] text-white text-xs font-semibold rounded-xl hover:bg-[#1A3A2A] transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Generate To-dos with AI</span>
+                        </button>
+                      </div>
+                    ) : (
+                      dynamicActionItems.map((item, idx) => {
+                        const isChecked = !!completedActions[idx];
+                        return (
+                          <div
+                            key={idx}
+                            className="bg-white p-3.5 rounded-2xl border border-neutral-200/80 shadow-2xs flex items-start justify-between gap-3 group transition-all select-none"
+                          >
+                            <div
+                              onClick={() => toggleActionItem(idx)}
+                              className="flex items-start gap-3 cursor-pointer flex-1"
+                            >
+                              <div
+                                className={`w-4 h-4 rounded-md border mt-0.5 flex items-center justify-center shrink-0 transition-colors ${isChecked
+                                  ? 'bg-[#234B36] border-[#234B36] text-white'
+                                  : 'border-neutral-300 bg-white'
+                                  }`}
+                              >
+                                {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                              </div>
+                              <span
+                                className={`text-xs sm:text-sm leading-snug ${isChecked
+                                  ? 'line-through text-neutral-400'
+                                  : 'text-neutral-800'
+                                  }`}
+                              >
+                                {item}
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const updated = dynamicActionItems.filter((_, i) => i !== idx).join('\n');
+                                await noteDetailService.updateNote(note.id, { actionItems: updated });
+                                note.actionItems = updated;
+                                if (onNoteUpdated) onNoteUpdated();
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-red-500 transition-opacity p-0.5 cursor-pointer"
+                              title="Delete to-do"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Section 3: DO MORE */}
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mb-2">
+                    DO MORE
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      'Tidy up transcript',
+                      'Shorter',
+                      'Suggest a title',
+                      'Draft an email',
+                    ].map((action, i) => {
+                      const isLoadingThis = aiActionLoading === action;
+                      return (
+                        <button
+                          key={i}
+                          disabled={!!aiActionLoading}
+                          onClick={() => handleDoMoreAction(action)}
+                          className="px-3.5 py-2 bg-white border border-neutral-200/90 rounded-full text-xs font-medium text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-all shadow-2xs cursor-pointer flex items-center gap-1.5 disabled:opacity-60"
+                        >
+                          {isLoadingThis ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-[#234B36]" />
+                          ) : null}
+                          <span>{action}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Dynamic Assistant Chat Thread */}
+                {chatMessages.length > 0 && (
+                  <div className="pt-2 space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                      ASSISTANT CONVERSATION
+                    </h4>
+                    <div className="space-y-3">
+                      {chatMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed ${msg.sender === 'user'
+                            ? 'bg-[#234B36] text-white ml-6'
+                            : 'bg-white border border-neutral-200/80 text-neutral-800 mr-6 shadow-2xs'
+                            }`}
+                        >
+                          {msg.text}
+                        </div>
+                      ))}
+
+                      {isAiThinking && (
+                        <div className="p-3.5 rounded-2xl bg-white border border-neutral-200/80 text-neutral-500 text-xs flex items-center gap-2 mr-6">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#234B36]" />
+                          <span>Thinking...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </ScrollArea>
+
+            {/* Bottom Assistant Input Box ("Ask about this note...") */}
+            <div className="p-4 border-t border-neutral-200/60 bg-[#F7F7F4]">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={assistantInput}
+                  onChange={(e) => setAssistantInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSendAssistantChat();
+                    }
+                  }}
+                  placeholder="Ask about this note..."
+                  className="w-full px-4 py-3 pr-10 bg-white border border-neutral-200 rounded-2xl text-xs sm:text-sm placeholder:text-neutral-400 text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#234B36] shadow-2xs"
+                />
+                <button
+                  type="button"
+                  disabled={isAiThinking}
+                  onClick={handleSendAssistantChat}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-[#234B36] p-1 transition-colors disabled:opacity-40 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+          </aside>
+        )}
+
+      </div>
     </div>
   );
 }

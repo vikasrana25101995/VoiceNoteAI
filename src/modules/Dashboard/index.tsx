@@ -1,40 +1,43 @@
 'use client';
 
-import { useDashboardState } from './CORE/hooks';
-import { DashboardActions } from './CORE/actions';
-import { PRESET_FOLDERS } from './CORE/constants';
+import React, { useState, useEffect } from 'react';
 import { 
-  useState,
-  useEffect,
   Mic, 
   Search, 
-  FolderPlus,
   Plus, 
-  Sparkles, 
-  Clock,
-  Settings,
-  MessageSquare,
+  PenTool, 
+  CheckSquare, 
+  LogOut, 
+  Settings, 
+  X, 
+  Check, 
+  Tag as TagIcon,
+  Sparkles,
+  FileText,
+  Bookmark,
   Trash2,
-  Check,
-  Menu,
-  X,
-  Moon,
-  Sun,
-  ExternalLink,
-  CheckSquare,
-  PenTool,
-  Edit3,
-  LogOut
-} from './CORE/imports';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+  Volume2
+} from 'lucide-react';
 import NoteDetail from '../NoteDetail';
-import AIChat from '../AIChat';
 import SettingsDialog from './components/SettingsDialog';
-import CreateNoteModal from './components/CreateNoteModal';
+import { useDashboardState } from './CORE/hooks';
+import { DashboardActions } from './CORE/actions';
+
+function formatTimeAgo(dateString?: string) {
+  if (!dateString) return 'Recently';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'Recently';
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (diffInSeconds < 60) return 'Just now';
+  const minutes = Math.floor(diffInSeconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 export default function Dashboard() {
   const state = useDashboardState();
@@ -43,26 +46,20 @@ export default function Dashboard() {
   const {
     notes,
     folders,
-    tasks,
     loading,
     searchQuery,
     selectedFolderId,
+    setSelectedFolderId,
     selectedTag,
     selectedNoteId,
     refreshAll,
     setSelectedNoteId,
+    createFolder,
   } = state;
 
-  const [isCreateNoteOpen, setIsCreateNoteOpen] = useState(false);
-  const [createNoteMode, setCreateNoteMode] = useState<'voice' | 'type'>('type');
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isTasksPanelOpen, setIsTasksPanelOpen] = useState(true);
-  const [taskFilterTab, setTaskFilterTab] = useState<'open' | 'done'>('open');
-  const [newTaskInput, setNewTaskInput] = useState('');
-  const [newFolderName, setNewFolderName] = useState('');
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [activeLibraryTab, setActiveLibraryTab] = useState<'all' | 'voice' | 'favourites' | 'trash'>('all');
+  const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name?: string | null } | null>(null);
 
   useEffect(() => {
@@ -92,618 +89,466 @@ export default function Dashboard() {
     }
   }, [notes, selectedNoteId, setSelectedNoteId]);
 
-  // Toggle Dark / Light Theme
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
-    if (!isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+  const createNewNote = async (mode: 'voice' | 'type') => {
+    try {
+      const isVoice = mode === 'voice';
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: isVoice ? 'New Voice Note' : 'Untitled Note',
+          content: '',
+          tags: isVoice ? ['VoiceNote'] : [],
+          duration: isVoice ? 1 : undefined,
+          folderId: selectedFolderId || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const newNote = await res.json();
+        setActiveLibraryTab('all');
+        setActiveTagFilter(null);
+        setSelectedFolderId('');
+        actions.handleSearchChange('');
+        await refreshAll();
+        setSelectedNoteId(newNote.id);
+      }
+    } catch (err) {
+      console.error('Error creating new note:', err);
     }
   };
 
-  const handleCreateTaskSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskInput.trim()) return;
-    const taskContent = newTaskInput.trim();
-    setNewTaskInput('');
-    await actions.handleCreateTask(
-      taskContent,
-      selectedNoteId || notes[0]?.id || 'note-1',
-      'Today',
-      'ME'
-    );
-  };
+  // Dynamically compute counts for Library items
+  const allNotesCount = notes.filter((n) => !n.isArchived).length;
+  const voiceNotesCount = notes.filter((n) => !n.isArchived && (n.duration || n.type === 'voice')).length;
+  const favoriteNotesCount = notes.filter((n) => !n.isArchived && n.isFavorite).length;
+  const trashNotesCount = notes.filter((n) => n.isArchived).length;
 
-  const handleNoteCreateSuccess = (newNoteId: string) => {
-    setIsCreateNoteOpen(false);
-    refreshAll();
-    setSelectedNoteId(newNoteId);
-  };
-
-  const openNoteCreator = (mode: 'voice' | 'type') => {
-    setCreateNoteMode(mode);
-    setIsCreateNoteOpen(true);
-  };
-
-  const formatDuration = (seconds?: number | null) => {
-    if (!seconds) return '';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getFolderDotColor = (folderName?: string) => {
-    switch (folderName?.toLowerCase()) {
-      case 'meetings': return 'bg-indigo-500';
-      case 'action list': return 'bg-rose-500';
-      case 'personal': return 'bg-purple-500';
-      default: return 'bg-slate-400';
+  // Dynamically compute tags & count per tag
+  const tagsMap = new Map<string, number>();
+  notes.forEach((n) => {
+    if (!n.isArchived && n.tags && Array.isArray(n.tags)) {
+      n.tags.forEach((t) => {
+        const clean = t.trim();
+        if (clean) {
+          tagsMap.set(clean, (tagsMap.get(clean) || 0) + 1);
+        }
+      });
     }
+  });
+  const dynamicTags = Array.from(tagsMap.entries());
+  const tagColors = ['bg-emerald-400', 'bg-amber-400', 'bg-sky-400', 'bg-teal-400', 'bg-purple-400', 'bg-rose-400'];
+
+  // Filter notes based on active library tab, selected folder, and tag filter
+  const filteredNotes = notes.filter((n) => {
+    if (activeLibraryTab === 'all' && n.isArchived) return false;
+    if (activeLibraryTab === 'voice' && (!n.duration || n.isArchived)) return false;
+    if (activeLibraryTab === 'favourites' && (!n.isFavorite || n.isArchived)) return false;
+    if (activeLibraryTab === 'trash' && !n.isArchived) return false;
+    if (selectedFolderId && n.folderId !== selectedFolderId) return false;
+    if (activeTagFilter && (!n.tags || !n.tags.includes(activeTagFilter))) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (
+        n.title.toLowerCase().includes(q) ||
+        n.content.toLowerCase().includes(q) ||
+        (n.summary && n.summary.toLowerCase().includes(q))
+      );
+    }
+    return true;
+  });
+
+  const getInitials = (name?: string | null, email?: string) => {
+    if (name) {
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+      return name.substring(0, 2).toUpperCase();
+    }
+    if (email) return email.substring(0, 2).toUpperCase();
+    return 'VN';
   };
-
-  const activeTasks = tasks.filter(t => taskFilterTab === 'open' ? !t.isCompleted : t.isCompleted);
-  const openCount = tasks.filter(t => !t.isCompleted).length;
-  const doneCount = tasks.filter(t => t.isCompleted).length;
-
-  const todayTasks = activeTasks.filter(t => t.dueDate === 'Today');
-  const thisWeekTasks = activeTasks.filter(t => t.dueDate !== 'Today');
 
   return (
-    <div className={`h-screen w-screen flex flex-col bg-[#F5F6F8] dark:bg-slate-950 text-slate-900 dark:text-white font-sans overflow-hidden ${isDarkMode ? 'dark' : ''}`}>
-
-      {/* TOP NAVIGATION BAR */}
-      <header className="h-16 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 flex items-center justify-between shrink-0 z-30">
-        
-        {/* App Logo */}
-        <div className="flex items-center gap-3 w-60">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsMobileSidebarOpen(true)}
-            className="lg:hidden text-slate-500 hover:text-slate-900 dark:hover:text-white"
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#635BFF] flex items-center justify-center shadow-sm shadow-indigo-500/30">
-              <Mic className="w-4.5 h-4.5 text-white" />
+    <div className="h-screen w-screen flex bg-[#FAFAF8] text-neutral-900 font-sans overflow-hidden selection:bg-[#234B36] selection:text-white">
+      
+      {/* ========================================== */}
+      {/* COLUMN 1: FAR LEFT SIDEBAR (DARK GREEN `#132E21`) */}
+      {/* ========================================== */}
+      <aside className="w-64 bg-[#132E21] text-white flex flex-col justify-between p-5 shrink-0 border-r border-[#1B3E2D] h-full overflow-y-auto">
+        <div className="space-y-6">
+          
+          {/* Brand Header */}
+          <div className="flex items-center gap-3 pt-1 px-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#498863] text-white shadow-sm">
+              <Mic className="h-4.5 w-4.5 stroke-[2.5]" />
             </div>
-            <span className="font-extrabold text-lg text-[#635BFF] dark:text-indigo-400 tracking-tight">VoiceNote AI</span>
+            <span className="text-lg font-semibold tracking-tight text-white">
+              VoiceNote AI
+            </span>
+          </div>
+
+          {/* Primary Action Button */}
+          <div className="pt-2">
+            {/* Add a note button */}
+            <button
+              onClick={() => createNewNote('type')}
+              className="w-full py-2.5 px-4 bg-[#2C5840] hover:bg-[#34674B] text-white font-medium rounded-xl shadow-xs transition-all flex items-center justify-center gap-2.5 text-xs sm:text-sm cursor-pointer"
+            >
+              <Plus className="h-4 w-4 stroke-[2.5]" />
+              <span>Add a note</span>
+            </button>
+          </div>
+
+          {/* LIBRARY Navigation Section */}
+          <div className="space-y-2 pt-2">
+            <div className="text-[10px] font-bold tracking-widest text-[#7CA891] uppercase px-2 mb-2">
+              LIBRARY
+            </div>
+            <nav className="space-y-1">
+              {/* All notes */}
+              <button
+                onClick={() => {
+                  setActiveLibraryTab('all');
+                  setActiveTagFilter(null);
+                  setSelectedFolderId('');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeLibraryTab === 'all' && !activeTagFilter && !selectedFolderId
+                    ? 'bg-[#2C5840] text-white font-semibold'
+                    : 'text-[#A4C4B5] hover:bg-[#1C412E] hover:text-white'
+                }`}
+              >
+                <span>All notes</span>
+                <span className="text-xs opacity-75 font-mono">{allNotesCount}</span>
+              </button>
+
+              {/* Voice notes */}
+              <button
+                onClick={() => {
+                  setActiveLibraryTab('voice');
+                  setActiveTagFilter(null);
+                  setSelectedFolderId('');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeLibraryTab === 'voice'
+                    ? 'bg-[#2C5840] text-white font-semibold'
+                    : 'text-[#A4C4B5] hover:bg-[#1C412E] hover:text-white'
+                }`}
+              >
+                <span>Voice notes</span>
+                <span className="text-xs opacity-75 font-mono">{voiceNotesCount}</span>
+              </button>
+
+              {/* Favourites */}
+              <button
+                onClick={() => {
+                  setActiveLibraryTab('favourites');
+                  setActiveTagFilter(null);
+                  setSelectedFolderId('');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeLibraryTab === 'favourites'
+                    ? 'bg-[#2C5840] text-white font-semibold'
+                    : 'text-[#A4C4B5] hover:bg-[#1C412E] hover:text-white'
+                }`}
+              >
+                <span>Favourites</span>
+                <span className="text-xs opacity-75 font-mono">{favoriteNotesCount}</span>
+              </button>
+
+              {/* Trash */}
+              <button
+                onClick={() => {
+                  setActiveLibraryTab('trash');
+                  setActiveTagFilter(null);
+                  setSelectedFolderId('');
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                  activeLibraryTab === 'trash'
+                    ? 'bg-[#2C5840] text-white font-semibold'
+                    : 'text-[#A4C4B5] hover:bg-[#1C412E] hover:text-white'
+                }`}
+              >
+                <span>Trash</span>
+                <span className="text-xs opacity-75 font-mono">{trashNotesCount}</span>
+              </button>
+            </nav>
+          </div>
+
+          {/* CATEGORIES / FOLDERS Section */}
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between px-2 mb-2">
+              <span className="text-[10px] font-bold tracking-widest text-[#7CA891] uppercase">
+                CATEGORIES
+              </span>
+              <button
+                onClick={async () => {
+                  const catName = prompt('New Category name:');
+                  if (catName && catName.trim()) {
+                    const newFolder = await createFolder(catName.trim());
+                    if (newFolder) {
+                      setSelectedFolderId(newFolder.id);
+                      setActiveLibraryTab('all');
+                      setActiveTagFilter(null);
+                    }
+                  }
+                }}
+                className="text-[#7CA891] hover:text-white transition-colors"
+                title="Create category folder"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <nav className="space-y-1">
+              {folders.length === 0 ? (
+                <div className="text-xs text-[#A4C4B5]/60 px-3 py-1 font-mono italic">
+                  No categories
+                </div>
+              ) : (
+                folders.map((folder) => {
+                  const isSelected = selectedFolderId === folder.id;
+                  const noteCount = folder._count?.notes ?? notes.filter((n) => n.folderId === folder.id).length;
+                  return (
+                    <button
+                      key={folder.id}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedFolderId('');
+                        } else {
+                          setSelectedFolderId(folder.id);
+                          setActiveTagFilter(null);
+                          setActiveLibraryTab('all');
+                        }
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#2C5840] text-white font-semibold'
+                          : 'text-[#A4C4B5] hover:bg-[#1C412E] hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                        <span className="truncate">{folder.name}</span>
+                      </div>
+                      <span className="text-xs opacity-75 font-mono ml-1">{noteCount}</span>
+                    </button>
+                  );
+                })
+              )}
+            </nav>
+          </div>
+
+          {/* TAGS Navigation Section */}
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between px-2 mb-2">
+              <span className="text-[10px] font-bold tracking-widest text-[#7CA891] uppercase">
+                TAGS
+              </span>
+              <button
+                onClick={() => {
+                  const tag = prompt('Filter by tag name:');
+                  if (tag && tag.trim()) setActiveTagFilter(tag.trim());
+                }}
+                className="text-[#7CA891] hover:text-white transition-colors"
+                title="Add tag filter"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <nav className="space-y-1">
+              {dynamicTags.length === 0 ? (
+                <div className="text-xs text-[#A4C4B5]/60 px-3 py-1 font-mono italic">
+                  No tags yet
+                </div>
+              ) : (
+                dynamicTags.map(([tagName, count], idx) => {
+                  const colorClass = tagColors[idx % tagColors.length];
+                  const isSelected = activeTagFilter === tagName;
+                  return (
+                    <button
+                      key={tagName}
+                      onClick={() => {
+                        if (isSelected) {
+                          setActiveTagFilter(null);
+                        } else {
+                          setActiveTagFilter(tagName);
+                          setSelectedFolderId('');
+                        }
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#2C5840] text-white font-semibold'
+                          : 'text-[#A4C4B5] hover:bg-[#1C412E] hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${colorClass}`} />
+                        <span className="truncate">{tagName}</span>
+                      </div>
+                      <span className="text-xs opacity-75 font-mono ml-1">{count}</span>
+                    </button>
+                  );
+                })
+              )}
+            </nav>
           </div>
         </div>
 
-        {/* Search Bar Input with shortcut pill ⌘K */}
-        <div className="flex-1 max-w-xl mx-4">
+        {/* Bottom User Profile Section */}
+        <div className="pt-4 border-t border-[#1B3E2D] flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-9 w-9 rounded-full bg-[#27533B] text-[#7BD4A5] font-bold text-xs flex items-center justify-center shrink-0 border border-[#3E7A5A]">
+              {getInitials(currentUser?.name, currentUser?.email)}
+            </div>
+            <div className="truncate">
+              <div className="text-xs font-semibold text-white truncate">
+                {currentUser?.name || currentUser?.email?.split('@')[0] || 'User'}
+              </div>
+              <div className="text-[11px] text-[#A4C4B5]/80 truncate">
+                Free plan
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              title="Settings"
+              className="p-1.5 text-[#A4C4B5] hover:text-white rounded-lg transition-colors cursor-pointer"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleLogout}
+              title="Log out"
+              className="p-1.5 text-[#A4C4B5] hover:text-red-400 rounded-lg transition-colors cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* ========================================== */}
+      {/* COLUMN 2: MIDDLE-LEFT NOTE LIST PANE */}
+      {/* ========================================== */}
+      <section className="w-80 bg-[#F7F7F4] border-r border-neutral-200/80 flex flex-col shrink-0 h-full">
+        {/* Header */}
+        <div className="p-4 border-b border-neutral-200/70 flex items-center justify-between">
+          <h2 className="font-bold text-neutral-900 text-sm capitalize">
+            {selectedFolderId
+              ? folders.find((f) => f.id === selectedFolderId)?.name || 'Category'
+              : activeTagFilter
+              ? `#${activeTagFilter}`
+              : activeLibraryTab === 'all'
+              ? 'All notes'
+              : activeLibraryTab}
+          </h2>
+          <span className="text-xs font-medium text-neutral-400">
+            {filteredNotes.length} notes
+          </span>
+        </div>
+
+        {/* Search Bar Input */}
+        <div className="p-3 border-b border-neutral-200/60 bg-[#F7F7F4]">
           <div className="relative">
-            <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
-            <Input
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <input
+              type="text"
               value={searchQuery}
               onChange={(e) => actions.handleSearchChange(e.target.value)}
-              placeholder="Search notes, transcripts, people..."
-              className="pl-10 pr-12 bg-slate-100/70 dark:bg-slate-800/60 border-slate-200/60 dark:border-slate-700/60 text-slate-800 dark:text-slate-100 text-xs rounded-xl h-9 placeholder:text-slate-400 focus-visible:ring-indigo-500"
+              placeholder="Search notes"
+              className="w-full pl-9 pr-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs placeholder:text-neutral-400 text-neutral-900 focus:outline-none focus:ring-1 focus:ring-[#234B36] shadow-2xs"
             />
-            <kbd className="absolute right-3 top-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 font-mono text-[10px] font-medium text-slate-400">
-              ⌘K
-            </kbd>
           </div>
         </div>
 
-        {/* Right Header Actions */}
-        <div className="flex items-center gap-3">
-          {/* Dark mode toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            className="w-9 h-9 rounded-xl border border-slate-200/60 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            title="Toggle theme"
-          >
-            {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-          </Button>
-
-          {/* Tasks button toggle */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsTasksPanelOpen(!isTasksPanelOpen)}
-            className={`h-9 px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 cursor-pointer ${
-              isTasksPanelOpen 
-                ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white' 
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            <CheckSquare className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Tasks</span>
-            <span className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              {openCount}
-            </span>
-          </Button>
-
-          {/* Ask Copilot trigger pill button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsChatOpen(true)}
-            className="h-9 px-3.5 rounded-full border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-[#635BFF] dark:text-indigo-400 hover:bg-indigo-100/50 text-xs font-semibold flex items-center gap-1.5 shadow-2xs cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#635BFF] dark:text-indigo-400" />
-            <span>Ask Copilot</span>
-          </Button>
-        </div>
-      </header>
-
-      {/* MAIN 4-PANE LAYOUT CONTENT AREA */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* COLUMN 1: LEFT SIDEBAR (Folders & Creation) */}
-        <aside className="hidden lg:flex w-60 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex-col p-4 shrink-0 justify-between">
-          
-          <div className="space-y-5">
-            
-            {/* Primary Action Buttons (Record or Type Note) */}
-            <div className="space-y-2">
-              <Button
-                onClick={() => openNoteCreator('voice')}
-                className="w-full bg-[#635BFF] hover:bg-[#5249ea] text-white font-bold h-10 rounded-full shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-98 text-xs"
-              >
-                <Mic className="w-3.5 h-3.5 text-white" />
-                <span>Record a note</span>
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => openNoteCreator('type')}
-                className="w-full bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-semibold h-9 rounded-full flex items-center justify-center gap-2 cursor-pointer text-xs"
-              >
-                <PenTool className="w-3.5 h-3.5 text-[#635BFF]" />
-                <span>Type a note</span>
-              </Button>
+        {/* Notes Cards Scroll Area */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          {filteredNotes.length === 0 ? (
+            <div className="py-12 text-center text-neutral-400 space-y-2">
+              <FileText className="w-8 h-8 mx-auto stroke-[1.5] text-neutral-300" />
+              <p className="text-xs font-semibold text-neutral-500">No notes found</p>
+              <p className="text-[11px] text-neutral-400">
+                {searchQuery ? 'Try a different search term' : 'Click "Write a note" or "New voice note" to start'}
+              </p>
             </div>
-
-            {/* Folders Section */}
-            <div>
-              <div className="flex items-center justify-between px-2 mb-3">
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">FOLDERS</span>
-                <button 
-                  onClick={() => {
-                    const name = prompt('Folder name:');
-                    if (name) actions.handleCreateFolder(name, 'bg-indigo-500');
-                  }}
-                  className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <nav className="space-y-1">
-                {/* All Notes item */}
-                <button
-                  onClick={() => actions.handleSelectFolder('')}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                    selectedFolderId === ''
-                      ? 'bg-indigo-50 dark:bg-indigo-950/60 text-[#635BFF] dark:text-indigo-300'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+          ) : (
+            filteredNotes.map((n) => {
+              const isSelected = selectedNoteId === n.id;
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => setSelectedNoteId(n.id)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-1.5 group relative ${
+                    isSelected
+                      ? 'bg-white border-[#234B36] shadow-xs ring-1 ring-[#234B36]/20'
+                      : 'bg-white/70 border-neutral-200/70 hover:bg-white hover:border-neutral-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span>All notes</span>
-                  </div>
-                  <span className="text-slate-400 text-xs font-medium">{notes.length}</span>
-                </button>
-
-                {/* Folders list */}
-                {folders.map((folder) => (
-                  <button
-                    key={folder.id}
-                    onClick={() => actions.handleSelectFolder(folder.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                      selectedFolderId === folder.id
-                        ? 'bg-indigo-50 dark:bg-indigo-950/60 text-[#635BFF] dark:text-indigo-300'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className={`w-2 h-2 rounded-full ${getFolderDotColor(folder.name)}`} />
-                      <span className="truncate max-w-[110px]">{folder.name}</span>
-                    </div>
-                    {folder._count && (
-                      <span className="text-slate-400 text-xs font-medium">{folder._count.notes}</span>
-                    )}
-                  </button>
-                ))}
-
-                {/* Unassigned */}
-                <button
-                  onClick={() => actions.handleSelectFolder('unassigned')}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                    selectedFolderId === 'unassigned'
-                      ? 'bg-indigo-50 dark:bg-indigo-950/60 text-[#635BFF] dark:text-indigo-300'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" />
-                    <span>Unassigned</span>
-                  </div>
-                  <span className="text-slate-400 text-xs font-medium">0</span>
-                </button>
-              </nav>
-            </div>
-          </div>
-
-          {/* Bottom Widget: Usage Bar + User Profile */}
-          <div className="space-y-4 pt-4 border-t border-slate-200/60 dark:border-slate-800">
-            {/* Free Usage Bar */}
-            <div className="bg-slate-100/70 dark:bg-slate-800/40 rounded-xl p-3 space-y-2 border border-slate-200/50 dark:border-slate-800">
-              <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                10 of 30 free minutes used
-              </div>
-              <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div className="h-full bg-[#635BFF] w-[33%] rounded-full" />
-              </div>
-            </div>
-
-            {/* Profile / Settings Bar */}
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-[#234B36] dark:text-emerald-300 font-bold text-xs flex items-center justify-center shrink-0">
-                  {currentUser?.name ? currentUser.name[0].toUpperCase() : currentUser?.email ? currentUser.email[0].toUpperCase() : 'U'}
-                </div>
-                <div className="truncate">
-                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
-                    {currentUser?.name || currentUser?.email || 'User'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => setIsSettingsOpen(true)}
-                  title="Settings"
-                  className="p-1.5 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={handleLogout}
-                  title="Log out"
-                  className="p-1.5 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* COLUMN 2: MIDDLE-LEFT NOTE LIST PANE */}
-        <section className="w-80 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0">
-          
-          {/* Note List Header */}
-          <div className="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-slate-900 dark:text-white text-sm">All notes</h2>
-              <span className="text-xs font-medium text-slate-400">{notes.length} notes</span>
-            </div>
-            
-            {/* Quick Type Note Button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => openNoteCreator('type')}
-              className="h-7 px-2 text-xs font-semibold text-[#635BFF] hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg flex items-center gap-1 cursor-pointer"
-              title="Type a new note"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New</span>
-            </Button>
-          </div>
-
-          {/* Cards List */}
-          <ScrollArea className="flex-1 p-3">
-            <div className="space-y-2.5">
-              {notes.map((note) => {
-                const isSelected = selectedNoteId === note.id;
-                const folderName = note.folder?.name || 'Meetings';
-
-                return (
-                  <div
-                    key={note.id}
-                    onClick={() => actions.handleSelectNote(note.id)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${
-                      isSelected
-                        ? 'bg-white dark:bg-slate-800 border-[#635BFF] shadow-sm ring-1 ring-[#635BFF]/30'
-                        : 'bg-white dark:bg-slate-900 border-slate-200/70 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    {/* Category dot + Date */}
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
-                      <span className={`w-2 h-2 rounded-full ${getFolderDotColor(folderName)}`} />
-                      <span>{folderName}</span>
-                      <span>·</span>
-                      <span>Today 9:40</span>
-                    </div>
-
-                    {/* Title */}
-                    <h3 className="font-bold text-sm text-slate-900 dark:text-white leading-snug line-clamp-1">
-                      {note.title}
+                  {/* Title & Delete button */}
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-bold text-sm text-neutral-900 leading-snug line-clamp-1 flex-1">
+                      {n.title}
                     </h3>
-
-                    {/* Excerpt */}
-                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                      {note.summary || note.content}
-                    </p>
-
-                    {/* Bottom Metadata Badges (Duration + Tasks) */}
-                    <div className="flex items-center gap-2 pt-1">
-                      {note.duration ? (
-                        <span className="text-[10px] font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                          {formatDuration(note.duration)}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <PenTool className="w-2.5 h-2.5 text-indigo-500" />
-                          <span>Typed</span>
-                        </span>
-                      )}
-                      <span className="text-[10px] font-semibold text-[#635BFF] dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full">
-                        {note.actionItems ? `${note.actionItems.split('\n').length} tasks` : '1 task'}
-                      </span>
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Delete this note?')) {
+                          actions.handleDeleteNote(n.id);
+                          if (selectedNoteId === n.id) {
+                            setSelectedNoteId(notes.find((item) => item.id !== n.id)?.id || null);
+                          }
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-red-500 transition-opacity p-0.5 rounded cursor-pointer"
+                      title="Delete note"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </section>
 
-        {/* COLUMN 3: MAIN NOTE DETAIL WORKSPACE */}
-        <main className="flex-1 flex flex-col bg-[#F5F6F8] dark:bg-slate-950 p-4 md:p-6 overflow-hidden min-w-0">
-          <NoteDetail 
-            noteId={selectedNoteId} 
-            onNoteUpdated={refreshAll}
-            onOpenCopilot={() => setIsChatOpen(true)}
-            onDeleteNote={(id) => {
-              actions.handleDeleteNote(id);
-              setSelectedNoteId(notes.find(n => n.id !== id)?.id || null);
-            }}
-          />
-        </main>
+                  {/* Subtitle snippet */}
+                  <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed font-normal">
+                    {n.summary || n.content}
+                  </p>
 
-        {/* COLUMN 4: RIGHT TASKS PANEL ("Tasks from your notes") */}
-        {isTasksPanelOpen && (
-          <aside className="w-80 bg-white dark:bg-slate-900 border-l border-slate-200/80 dark:border-slate-800 flex flex-col shrink-0">
-            
-            {/* Panel Header */}
-            <div className="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Tasks from your notes</h3>
-                <p className="text-[11px] text-slate-400 font-medium">{openCount} open · pulled from {notes.length} notes</p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsTasksPanelOpen(false)}
-                className="h-7 w-7 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {/* Quick Add Task Input Form */}
-            <div className="p-3 border-b border-slate-200/60 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-              <form onSubmit={handleCreateTaskSubmit} className="flex items-center gap-2">
-                <Input
-                  value={newTaskInput}
-                  onChange={(e) => setNewTaskInput(e.target.value)}
-                  placeholder="Add a new task..."
-                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs h-8 rounded-xl placeholder:text-slate-400"
-                />
-                <Button 
-                  type="submit" 
-                  size="icon" 
-                  className="h-8 w-8 bg-[#635BFF] hover:bg-[#5249ea] text-white shrink-0 rounded-xl cursor-pointer"
-                  title="Add Task"
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </form>
-            </div>
-
-            {/* Filter Pill Tabs (Open 5 | Done 1) */}
-            <div className="p-3 border-b border-slate-200/60 dark:border-slate-800 flex gap-2">
-              <button
-                onClick={() => setTaskFilterTab('open')}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
-                  taskFilterTab === 'open'
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-400 hover:text-slate-700'
-                }`}
-              >
-                Open {openCount}
-              </button>
-              <button
-                onClick={() => setTaskFilterTab('done')}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
-                  taskFilterTab === 'done'
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs'
-                    : 'text-slate-400 hover:text-slate-700'
-                }`}
-              >
-                Done {doneCount}
-              </button>
-            </div>
-
-            {/* Tasks List */}
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-6">
-                
-                {/* TODAY Tasks */}
-                {todayTasks.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                      <span>TODAY</span>
-                      <span className="text-slate-400">{todayTasks.length}</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {todayTasks.map((task) => (
-                        <div key={task.id} className="flex items-start gap-3 group">
-                          {/* Checkbox */}
-                          <button
-                            onClick={() => actions.handleToggleTask(task.id, !task.isCompleted)}
-                            className={`mt-0.5 w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition cursor-pointer ${
-                              task.isCompleted
-                                ? 'bg-indigo-600 border-indigo-600 text-white'
-                                : 'border-slate-300 dark:border-slate-600 hover:border-indigo-500'
-                            }`}
-                          >
-                            {task.isCompleted && <Check className="w-3 h-3 stroke-[3px]" />}
-                          </button>
-
-                          {/* Task details */}
-                          <div className="flex-1 min-w-0 space-y-1.5">
-                            <p className={`text-xs font-semibold leading-snug ${
-                              task.isCompleted ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'
-                            }`}>
-                              {task.content}
-                            </p>
-
-                            {/* Reference Link Pill */}
-                            <div className="flex items-center justify-between gap-1">
-                              <button
-                                onClick={() => actions.handleSelectNote(task.noteId)}
-                                className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 px-2 py-0.5 rounded-md truncate max-w-[170px] cursor-pointer"
-                              >
-                                <span>Today</span>
-                                <ExternalLink className="w-2.5 h-2.5" />
-                                <span className="truncate">{task.note?.title || 'Observation R...'}</span>
-                              </button>
-
-                              {/* User Avatar */}
-                              <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-[#635BFF] dark:text-indigo-300 font-bold text-[9px] flex items-center justify-center shrink-0">
-                                {task.assignee || 'ME'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  {/* Metadata Footer: "12 min ago · Voice" */}
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-neutral-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>{formatTimeAgo(n.createdAt)}</span>
+                    <span>·</span>
+                    <span>{n.duration || n.type === 'voice' ? 'Voice' : 'Written'}</span>
                   </div>
-                )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
 
-                {/* THIS WEEK Tasks */}
-                {thisWeekTasks.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                      <span>THIS WEEK</span>
-                      <span className="text-slate-400">{thisWeekTasks.length}</span>
-                    </div>
+      {/* ========================================== */}
+      {/* COLUMN 3 & 4: MAIN NOTE CANVAS & ASSISTANT PANEL */}
+      {/* ========================================== */}
+      <main className="flex-1 flex overflow-hidden min-w-0 bg-[#FAFAF8]">
+        <NoteDetail
+          noteId={selectedNoteId}
+          onNoteUpdated={refreshAll}
+          onDeleteNote={(id) => {
+            actions.handleDeleteNote(id);
+            setSelectedNoteId(notes.find((n) => n.id !== id)?.id || null);
+          }}
+        />
+      </main>
 
-                    <div className="space-y-3">
-                      {thisWeekTasks.map((task) => (
-                        <div key={task.id} className="flex items-start gap-3 group">
-                          <button
-                            onClick={() => actions.handleToggleTask(task.id, !task.isCompleted)}
-                            className={`mt-0.5 w-4 h-4 rounded-md border flex items-center justify-center shrink-0 transition cursor-pointer ${
-                              task.isCompleted
-                                ? 'bg-indigo-600 border-indigo-600 text-white'
-                                : 'border-slate-300 dark:border-slate-600 hover:border-indigo-500'
-                            }`}
-                          >
-                            {task.isCompleted && <Check className="w-3 h-3 stroke-[3px]" />}
-                          </button>
-
-                          <div className="flex-1 min-w-0 space-y-1.5">
-                            <p className={`text-xs font-semibold leading-snug ${
-                              task.isCompleted ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-slate-200'
-                            }`}>
-                              {task.content}
-                            </p>
-
-                            <div className="flex items-center justify-between gap-1">
-                              <button
-                                onClick={() => actions.handleSelectNote(task.noteId)}
-                                className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 px-2 py-0.5 rounded-md truncate max-w-[170px] cursor-pointer"
-                              >
-                                <span>{task.dueDate || 'Fri'}</span>
-                                <ExternalLink className="w-2.5 h-2.5" />
-                                <span className="truncate">{task.note?.title || 'Project Team ...'}</span>
-                              </button>
-
-                              <span className="w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-300 font-bold text-[9px] flex items-center justify-center shrink-0">
-                                {task.assignee || 'J'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            </ScrollArea>
-          </aside>
-        )}
-
-      </div>
-
-      {/* POPUP MODAL: CREATE NOTE (Voice or Type) */}
-      <CreateNoteModal
-        open={isCreateNoteOpen}
-        onOpenChange={setIsCreateNoteOpen}
-        initialMode={createNoteMode}
-        folders={folders}
-        onSuccess={handleNoteCreateSuccess}
+      {/* Settings Modal */}
+      <SettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
       />
-
-      {/* SLIDE-OUT PANEL: CHAT COPILOT */}
-      <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
-        <SheetContent side="right" className="w-[350px] sm:w-[450px] bg-white dark:bg-slate-950 border-l border-slate-200 dark:border-slate-800 p-0 text-slate-900 dark:text-white">
-          <AIChat noteId={selectedNoteId} />
-        </SheetContent>
-      </Sheet>
-
-      {/* MOBILE SIDEBAR (Drawer) */}
-      <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-        <SheetContent side="left" className="w-64 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col text-slate-900 dark:text-white">
-          <div className="flex items-center gap-2 mb-6">
-            <Mic className="w-6 h-6 text-[#635BFF]" />
-            <span className="font-extrabold text-lg text-[#635BFF]">VoiceNote AI</span>
-          </div>
-
-          <ScrollArea className="flex-1 pr-2">
-            <nav className="space-y-1.5">
-              <button
-                onClick={() => { actions.handleSelectFolder(''); setIsMobileSidebarOpen(false); }}
-                className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold ${
-                  selectedFolderId === '' ? 'bg-indigo-50 text-[#635BFF]' : 'text-slate-600'
-                }`}
-              >
-                <span>All Notes</span>
-                <Badge className="bg-slate-100 text-slate-600 text-[10px]">{notes.length}</Badge>
-              </button>
-
-              {folders.map((folder) => (
-                <button
-                  onClick={() => { actions.handleSelectFolder(folder.id); setIsMobileSidebarOpen(false); }}
-                  className={`w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-semibold ${
-                    selectedFolderId === folder.id ? 'bg-indigo-50 text-[#635BFF]' : 'text-slate-600'
-                  }`}
-                >
-                  <span className="truncate">{folder.name}</span>
-                </button>
-              ))}
-            </nav>
-          </ScrollArea>
-        </SheetContent>
-      </Sheet>
-
-      {/* POPUP MODAL: SETTINGS */}
-      <SettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
-
     </div>
   );
 }
+
