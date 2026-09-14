@@ -69,6 +69,14 @@ export function useDashboardState() {
     }
   };
 
+  const createTask = async (content: string, noteId?: string, dueDate?: string, assignee?: string) => {
+    const newTask = await dashboardService.createTask(content, noteId, dueDate, assignee);
+    if (newTask) {
+      await refreshTasks();
+    }
+    return newTask;
+  };
+
   const handleToggleTask = async (id: string, isCompleted: boolean) => {
     const updated = await dashboardService.toggleTask(id, isCompleted);
     if (updated) {
@@ -95,6 +103,7 @@ export function useDashboardState() {
     refreshAll,
     createFolder,
     deleteNote,
+    createTask,
     handleToggleTask
   };
 }

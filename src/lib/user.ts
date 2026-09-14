@@ -1,6 +1,23 @@
 import { prisma } from './db';
+import { getSession } from './session';
 
 export async function getOrCreateDefaultUser() {
+  // First, check if there is an active logged-in user session
+  try {
+    const session = await getSession();
+    if (session && session.userId) {
+      const loggedInUser = await prisma.user.findUnique({
+        where: { id: session.userId },
+      });
+      if (loggedInUser) {
+        return loggedInUser;
+      }
+    }
+  } catch (err) {
+    console.warn('Session check fallback in getOrCreateDefaultUser:', err);
+  }
+
+  // Fallback to default demo user for guest / unauthenticated dev access
   const email = 'demo@voicenote.ai';
   try {
     let user = await prisma.user.findUnique({
@@ -18,8 +35,6 @@ export async function getOrCreateDefaultUser() {
           },
         });
       } catch (createError: any) {
-        // Catch P2002 Unique Constraint violation error, which can happen if
-        // concurrent API requests try to create the default user at the same time.
         if (createError && (createError.code === 'P2002' || createError.message?.includes('UniqueConstraintViolation'))) {
           user = await prisma.user.findUnique({
             where: { email },
@@ -37,7 +52,6 @@ export async function getOrCreateDefaultUser() {
     return user;
   } catch (error) {
     console.error('Error getting or creating default user:', error);
-    // Return a fallback mock user object if database is not connected yet, to prevent app crashing
     return {
       id: 'default-user-id',
       email,

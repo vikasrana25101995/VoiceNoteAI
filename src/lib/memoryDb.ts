@@ -29,6 +29,7 @@ export interface Task {
   id: string;
   content: string;
   dueDate?: string | null;
+  assignee?: string | null;
   isCompleted: boolean;
   noteId: string;
   userId: string;
@@ -41,65 +42,99 @@ export interface Task {
 
 class MemoryDatabase {
   private folders: Folder[] = [
-    { id: 'folder-work', name: 'Work', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', createdAt: new Date().toISOString() },
-    { id: 'folder-meetings', name: 'Meetings', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', createdAt: new Date().toISOString() },
-    { id: 'folder-ideas', name: 'Ideas', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', createdAt: new Date().toISOString() },
+    { id: 'folder-meetings', name: 'Meetings', color: 'bg-indigo-500/10 text-indigo-600 border-indigo-200', createdAt: new Date().toISOString() },
+    { id: 'folder-action-list', name: 'Action list', color: 'bg-rose-500/10 text-rose-600 border-rose-200', createdAt: new Date().toISOString() },
+    { id: 'folder-personal', name: 'Personal', color: 'bg-purple-500/10 text-purple-600 border-purple-200', createdAt: new Date().toISOString() },
   ];
 
   private notes: Note[] = [
     {
       id: 'note-1',
       title: 'Project Team Sync',
-      content: 'Hi, this is a voice note recording from our team sync. We discussed the launch details for VoiceNote AI, using Next.js, shadcn/ui, and PostgreSQL. We need to implement a premium user interface with glassmorphism and smooth animations. Sarah needs to finalize the dashboard components by Wednesday. John needs to complete the database migrations and seeding by Thursday. Also, let\'s schedule our next review session for Friday at 10:00 AM to go over the final walkthrough. Let me know if you have any questions!',
-      summary: 'Project team sync discussing the launch of VoiceNote AI. Covers tech stack components, styling guidelines, and individual task deadlines.',
-      bulletPoints: 'Discussed the VoiceNote AI launch timeline and system components.\nEmphasized the importance of premium UI/UX design (glassmorphism, micro-animations).\nSet clear deliverables and action items for individual team members.',
-      actionItems: 'Sarah to finalize the dashboard components by Wednesday.\nJohn to complete database migrations and seeding by Thursday.\nSchedule review session for Friday at 10:00 AM.',
-      tags: ['VoiceNote', 'AI', 'Meeting', 'Sync'],
-      duration: 35,
+      content: 'The team is one step behind on the dashboard because database migrations aren\'t done. John takes the migrations, Sarah continues on components once seeding lands, and the review moves to Friday to give QA a full day.\n\nMigrations + seeding are the critical path — everything else waits on them.\nReview session moved from Wednesday to Friday 3 PM.\nQA gets a full day before the demo; no scope added this sprint.',
+      summary: 'The team is one step behind on the dashboard because database migrations aren\'t done. John takes the migrations, Sarah continues on components once seeding lands, and the review moves to Friday to give QA a full day.',
+      bulletPoints: '• Migrations + seeding are the critical path — everything else waits on them.\n• Review session moved from Wednesday to Friday 3 PM.\n• QA gets a full day before the demo; no scope added this sprint.',
+      actionItems: 'John: complete database migrations and seeding\nMove review session to Friday 3 PM\nSarah: finalize dashboard components',
+      tags: ['Meetings', 'Dashboard', 'Sprint'],
+      duration: 752, // 12m 32s
       userId: 'default-user-id',
       folderId: 'folder-meetings',
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+      createdAt: new Date().toISOString(), // Today 9:40 AM
+      updatedAt: new Date().toISOString(),
     },
     {
       id: 'note-2',
-      title: 'App Design Brainstorm',
-      content: 'Explored layout styles including sidebar navigation and expandable folders. Considered adding AI chat functionality for note summaries. Discussed exporting capabilities to PDF, Markdown, and text formats.',
-      summary: 'Brainstorm session for layout styles, sidebar navigation, AI chat capabilities, and multi-format note exporting (PDF, Markdown, text).',
-      bulletPoints: 'Explored layout styles including sidebar navigation and expandable folders.\nConsidered adding AI chat functionality for note summaries.\nDiscussed exporting capabilities to PDF, Markdown, and text formats.',
-      actionItems: 'Create Figma UI layouts for the chat interface.\nResearch local web voice recorder browser constraints.',
-      tags: ['Brainstorm', 'Design', 'Ideas'],
-      duration: 18,
+      title: 'Observation Regarding Pinku\'s Mistake',
+      content: 'A note to myself about the invoice mix-up and how to close the loop without making Pinku uncomfortable. We need to double-check the totals and confirm accounting entries.',
+      summary: 'A note to myself about the invoice mix-up and how to close the loop without making Pinku feel awkward.',
+      bulletPoints: '• Invoice totals need follow-up with Pinku.\n• Keep discussion constructive and loop closed.',
+      actionItems: 'Follow up with Pinku about the invoice totals',
+      tags: ['Action list', 'Invoices'],
+      duration: 184, // 3m 04s
       userId: 'default-user-id',
-      folderId: 'folder-ideas',
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+      folderId: 'folder-action-list',
+      createdAt: new Date(Date.now() - 1000 * 60 * 75).toISOString(), // Today 8:15 AM
+      updatedAt: new Date(Date.now() - 1000 * 60 * 75).toISOString(),
+    },
+    {
+      id: 'note-3',
+      title: 'Northwind renewal call',
+      content: 'They\'ll renew for a year if SSO ships by Q4. Pricing is settled; procurement needs a security overview.',
+      summary: 'They\'ll renew for a year if SSO ships by Q4. Pricing is settled; procurement needs a security overview.',
+      bulletPoints: '• SSO shipping in Q4 is essential for renewal.\n• Pricing is locked; send security compliance overview.',
+      actionItems: 'Send security overview to Northwind procurement',
+      tags: ['Meetings', 'Sales', 'Enterprise'],
+      duration: 1446, // 24m 06s
+      userId: 'default-user-id',
+      folderId: 'folder-meetings',
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // Yesterday
       updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    },
+    {
+      id: 'note-4',
+      title: 'Idea: offline-first transcription',
+      content: 'Half my recording happens on the train with no signal. Queue locally, transcribe offline when disconnected, and sync with server once online.',
+      summary: 'Half my recording happens on the train with no signal. Queue locally, transcribe offline.',
+      bulletPoints: '• Queue recordings locally when offline.\n• Transcribe via local AI or background sync when reconnected.',
+      actionItems: 'Explore offline web transcription libraries',
+      tags: ['Personal', 'Product', 'Ideas'],
+      duration: 101, // 1m 41s
+      userId: 'default-user-id',
+      folderId: 'folder-personal',
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), // Mon
+      updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
     }
   ];
 
   private tasks: Task[] = [
     {
       id: 'task-1',
-      content: 'Sarah: Finalize dashboard components',
+      content: 'Follow up with Pinku about the invoice totals',
+      dueDate: 'Today',
+      assignee: 'P',
       isCompleted: false,
-      noteId: 'note-1',
+      noteId: 'note-2',
       userId: 'default-user-id',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
     {
       id: 'task-2',
-      content: 'John: Complete database migrations and seeding',
+      content: 'Send security overview to Northwind procurement',
+      dueDate: 'Today',
+      assignee: 'ME',
       isCompleted: false,
-      noteId: 'note-1',
+      noteId: 'note-3',
       userId: 'default-user-id',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
     {
       id: 'task-3',
-      content: 'Schedule review session for Friday',
-      isCompleted: true,
+      content: 'John: complete database migrations and seeding',
+      dueDate: 'Thu',
+      assignee: 'J',
+      isCompleted: false,
       noteId: 'note-1',
       userId: 'default-user-id',
       createdAt: new Date().toISOString(),
@@ -107,9 +142,33 @@ class MemoryDatabase {
     },
     {
       id: 'task-4',
-      content: 'Create Figma UI layouts',
+      content: 'Move review session to Friday 3 PM',
+      dueDate: 'Fri',
+      assignee: 'ME',
       isCompleted: false,
-      noteId: 'note-2',
+      noteId: 'note-1',
+      userId: 'default-user-id',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'task-5',
+      content: 'Sarah: finalize dashboard components',
+      dueDate: 'Next week',
+      assignee: 'S',
+      isCompleted: false,
+      noteId: 'note-1',
+      userId: 'default-user-id',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 'task-6',
+      content: 'Review previous sprint retrospective',
+      dueDate: 'Done',
+      assignee: 'ME',
+      isCompleted: true,
+      noteId: 'note-1',
       userId: 'default-user-id',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

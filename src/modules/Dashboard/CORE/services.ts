@@ -67,6 +67,21 @@ export class DashboardService {
     }
   }
 
+  async createTask(content: string, noteId?: string, dueDate?: string, assignee?: string): Promise<Task | null> {
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, noteId, dueDate, assignee }),
+      });
+      if (!res.ok) throw new Error('Failed to create task');
+      return res.json();
+    } catch (error) {
+      console.error('Service error creating task:', error);
+      return null;
+    }
+  }
+
   async toggleTask(id: string, isCompleted: boolean): Promise<Task | null> {
     try {
       const res = await fetch(`/api/tasks/${id}`, {

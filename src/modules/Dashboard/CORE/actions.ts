@@ -45,6 +45,11 @@ export class DashboardActions {
     }
   }
 
+  async handleCreateTask(content: string, noteId?: string, dueDate?: string, assignee?: string) {
+    if (!content.trim()) return null;
+    return await this.state.createTask(content, noteId, dueDate, assignee);
+  }
+
   async handleToggleTask(id: string, isCompleted: boolean) {
     await this.state.handleToggleTask(id, isCompleted);
   }

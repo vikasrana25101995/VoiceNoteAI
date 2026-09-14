@@ -30,3 +30,42 @@ export async function GET() {
     return NextResponse.json(fallbackTasks);
   }
 }
+
+export async function POST(request: Request) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { content, noteId, dueDate, assignee } = body;
+
+  if (!content) {
+    return NextResponse.json({ error: 'Task content is required' }, { status: 400 });
+  }
+
+  try {
+    const user = await getOrCreateDefaultUser();
+    const task = await prisma.task.create({
+      data: {
+        content,
+        noteId: noteId || undefined,
+        dueDate: dueDate || 'Today',
+        userId: user.id,
+      },
+    });
+
+    return NextResponse.json(task, { status: 201 });
+  } catch (error) {
+    console.warn('[Database Offline] Falling back to in-memory store for POST /api/tasks');
+    const newTask = memoryDb.createTask(content, noteId || 'note-1', dueDate ? new Date() : undefined);
+    if (assignee) {
+      newTask.assignee = assignee;
+    }
+    if (dueDate) {
+      newTask.dueDate = dueDate;
+    }
+    return NextResponse.json(newTask, { status: 201 });
+  }
+}

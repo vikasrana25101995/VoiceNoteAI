@@ -28,5 +28,8 @@ export {
   X,
   Send,
   Loader2,
-  Edit2
+  Edit2,
+  Edit3,
+  PenTool,
+  ExternalLink
 } from 'lucide-react';

@@ -29,6 +29,7 @@ export interface Task {
   id: string;
   content: string;
   dueDate?: string | null;
+  assignee?: string | null;
   isCompleted: boolean;
   noteId: string;
   userId: string;

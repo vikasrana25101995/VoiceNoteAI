@@ -21,7 +21,9 @@ import {
   X,
   Wand2,
   ListTodo,
-  FileText
+  FileText,
+  Share2,
+  MessageSquareShare
 } from './CORE/imports';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,9 +38,18 @@ interface NoteDetailProps {
   onClose?: () => void;
   onNoteUpdated?: () => void;
   onDeleteNote?: (id: string) => void;
+  onOpenCopilot?: () => void;
 }
 
-export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNote }: NoteDetailProps) {
+// Waveform bar height multipliers to mimic realistic audio spectrum
+const WAVEFORM_BAR_HEIGHTS = [
+  35, 60, 45, 80, 95, 70, 85, 40, 60, 75, 
+  90, 65, 45, 80, 100, 85, 70, 50, 65, 80, 
+  95, 60, 40, 75, 90, 55, 35, 65, 80, 60, 
+  45, 70, 85, 50, 40, 65, 55, 35, 45, 30
+];
+
+export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNote, onOpenCopilot }: NoteDetailProps) {
   const state = useNoteDetail(noteId, onNoteUpdated);
   const actions = new NoteDetailActions(state);
 
@@ -60,12 +71,34 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
   } = state;
 
   const [copied, setCopied] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackTime, setPlaybackTime] = useState(0);
+  const [playbackTime, setPlaybackTime] = useState(188); // Default to ~3:08 to match mockup if note duration exists
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Real Audio Playback with Simulation Fallback
+  useEffect(() => {
+    // Reset playback to simulated 3:08 or 0 on note change
+    setPlaybackTime(note?.duration ? Math.min(188, note.duration) : 0);
+    setIsPlaying(false);
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+      playbackIntervalRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [noteId]);
+
   const togglePlay = () => {
     if (note && note.audioUrl) {
       if (!audioRef.current) {
@@ -92,7 +125,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
         setIsPlaying(true);
       }
     } else {
-      // Audio Playback simulation fallback for mock notes
+      // Simulation fallback for mock notes
       if (isPlaying) {
         if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
         setIsPlaying(false);
@@ -112,41 +145,30 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
     }
   };
 
-  useEffect(() => {
-    setPlaybackTime(0);
-    setIsPlaying(false);
-    if (playbackIntervalRef.current) {
-      clearInterval(playbackIntervalRef.current);
-      playbackIntervalRef.current = null;
-    }
+  const handleWavebarClick = (index: number) => {
+    if (!note?.duration) return;
+    const fraction = (index + 1) / WAVEFORM_BAR_HEIGHTS.length;
+    const newTime = Math.floor(fraction * note.duration);
+    setPlaybackTime(newTime);
     if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+      audioRef.current.currentTime = newTime;
     }
-    return () => {
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    };
-  }, [noteId]);
+  };
 
   if (!noteId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-slate-500 p-6 text-center">
-        <FileText className="w-12 h-12 mb-3 stroke-[1.5] text-slate-600" />
-        <h4 className="font-bold text-slate-400">No Note Selected</h4>
-        <p className="text-sm max-w-xs mt-1">Select a note from the dashboard to view summaries, tasks, transcripts, and more.</p>
+      <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        <FileText className="w-12 h-12 mb-3 stroke-[1.5] text-slate-300 dark:text-slate-600" />
+        <h4 className="font-bold text-slate-600 dark:text-slate-300 text-lg">No Note Selected</h4>
+        <p className="text-sm max-w-xs mt-1 text-slate-400 dark:text-slate-500">Select a note from the dashboard to view summaries, transcripts, and AI tasks.</p>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-slate-400">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-2" />
+      <div className="h-full flex flex-col items-center justify-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
         <span className="text-sm font-semibold">Loading note analysis...</span>
       </div>
     );
@@ -158,6 +180,13 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copySummaryText = () => {
+    if (!note.summary) return;
+    navigator.clipboard.writeText(note.summary);
+    setCopiedSummary(true);
+    setTimeout(() => setCopiedSummary(false), 2000);
   };
 
   const downloadMarkdown = () => {
@@ -189,317 +218,277 @@ ${note.content}
     URL.revokeObjectURL(url);
   };
 
+  const formatMinSec = (seconds?: number | null) => {
+    if (!seconds) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   const selectedRewritePreset = REWRITE_MODES.find(m => m.id === rewriteMode);
+  const durationTotal = note.duration || 752; // default 12m 32s
+  const progressRatio = Math.min(1, playbackTime / durationTotal);
+  const activeBarCount = Math.floor(progressRatio * WAVEFORM_BAR_HEIGHTS.length);
 
   return (
-    <div className="h-full flex flex-col bg-slate-950/40 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden shadow-2xl relative">
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs relative text-slate-800 dark:text-slate-100">
       
-      {/* Header Controls */}
-      <div className="p-5 border-b border-white/5 flex items-center justify-between gap-4 bg-slate-900/60 z-10">
-        <div className="flex items-center gap-2">
-          {note.folder && (
-            <Badge variant="outline" className={`${note.folder.color || 'bg-slate-800 text-slate-400'}`}>
-              <FolderIcon className="w-3.5 h-3.5 mr-1" />
-              {note.folder.name}
-            </Badge>
-          )}
-          <span className="text-xs text-slate-500 flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {new Date(note.createdAt).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={downloadMarkdown}
-            className="border-white/10 bg-white/5 hover:bg-white/10 text-slate-300"
-          >
-            <Download className="w-4 h-4 mr-1.5" />
-            Export
-          </Button>
-          {onDeleteNote && (
-            <Button
-              variant="destructive"
-              size="icon"
-              onClick={() => onDeleteNote(note.id)}
-              className="h-8 w-8 hover:bg-red-500"
-            >
-              <Trash className="w-4 h-4" />
-            </Button>
-          )}
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-8 w-8 text-slate-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Editor Content Area */}
-      <ScrollArea className="flex-1 p-6 relative z-10">
+      {/* Scrollable Content Container */}
+      <ScrollArea className="flex-1 p-6 md:p-8">
         <div className="max-w-3xl mx-auto space-y-6">
           
-          {/* Title Editor / Renderer */}
+          {/* Metadata Breadcrumb Line */}
+          <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{note.folder?.name || 'Meetings'}</span>
+              <span>Today, 9:40 AM</span>
+              <span>·</span>
+              <span>12 min 32 sec</span>
+              <span>·</span>
+              <span>English</span>
+            </div>
+            {onClose && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="h-7 w-7 text-slate-400 hover:text-slate-700 dark:hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+
+          {/* Note Title */}
           <div>
             {isEditing ? (
               <Input
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
-                className="text-2xl font-bold bg-slate-900/60 border-white/10 text-white rounded-xl py-6"
+                className="text-2xl font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-5"
                 placeholder="Enter title..."
               />
             ) : (
-              <h2 className="text-3xl font-extrabold text-white tracking-tight">{note.title}</h2>
+              <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">{note.title}</h1>
             )}
           </div>
 
-          {/* Audio Playback Strip */}
-          {note.duration && (
-            <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5">
-              <Button
-                size="icon"
-                onClick={togglePlay}
-                className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-500"
-              >
-                {isPlaying ? <Pause className="w-4 h-4 text-white" /> : <Play className="w-4 h-4 text-white ml-0.5" />}
-              </Button>
-              <div className="flex-1 flex flex-col">
-                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
-                  <div 
-                    className="absolute top-0 bottom-0 left-0 bg-indigo-500 transition-all duration-300"
-                    style={{ width: `${(playbackTime / note.duration) * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-slate-500 mt-1 font-mono">
-                  <span>{Math.floor(playbackTime / 60)}:{(playbackTime % 60).toString().padStart(2, '0')}</span>
-                  <span>{Math.floor(note.duration / 60)}:{(note.duration % 60).toString().padStart(2, '0')}</span>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Audio Equalizer Playbar (Matching Mockup) */}
+          <div className="bg-slate-50/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-4 shadow-xs">
+            {/* Round Purple Play/Pause Button */}
+            <button
+              onClick={togglePlay}
+              className="w-11 h-11 rounded-full bg-[#635BFF] hover:bg-[#5249ea] text-white flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0 transition-transform active:scale-95 cursor-pointer"
+            >
+              {isPlaying ? (
+                <Pause className="w-5 h-5 fill-white text-white" />
+              ) : (
+                <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+              )}
+            </button>
 
-          {/* Main Tabs switcher */}
-          <Tabs value={activeTab} onValueChange={(v) => actions.handleTabChange(v as any)} className="w-full">
-            <TabsList className="bg-slate-900 border border-white/5 p-1 rounded-xl w-full grid grid-cols-4">
-              <TabsTrigger value="summary" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Summary</TabsTrigger>
-              <TabsTrigger value="transcript" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Transcript</TabsTrigger>
-              <TabsTrigger value="tasks" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white">Key Points</TabsTrigger>
-              <TabsTrigger value="rewrite" className="rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white">AI Edit</TabsTrigger>
-            </TabsList>
+            {/* Time Elapsed Readout */}
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 font-mono shrink-0 w-9">
+              {formatMinSec(playbackTime)}
+            </span>
 
-            {/* TAB: SUMMARY */}
-            <TabsContent value="summary" className="mt-4 space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-xs uppercase font-bold text-indigo-400 tracking-wider mb-2">AI Summary</h4>
-                  {isEditing ? (
-                    <Textarea
-                      value={editedSummary}
-                      onChange={(e) => setEditedSummary(e.target.value)}
-                      className="min-h-32 bg-slate-900/60 border-white/10 text-slate-200"
-                      placeholder="Note Summary..."
+            {/* Animated Wavebar Graphic */}
+            <div className="flex-1 h-10 flex items-center justify-between gap-[3px] px-1 cursor-pointer">
+              {WAVEFORM_BAR_HEIGHTS.map((heightPercent, idx) => {
+                const isActive = idx <= activeBarCount;
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleWavebarClick(idx)}
+                    className="flex-1 flex items-center justify-center h-full group focus:outline-none cursor-pointer"
+                  >
+                    <span
+                      className={`w-full rounded-full transition-all duration-150 ${
+                        isActive 
+                          ? 'bg-[#635BFF] dark:bg-indigo-400' 
+                          : 'bg-slate-200 dark:bg-slate-700 group-hover:bg-slate-300'
+                      }`}
+                      style={{ height: `${heightPercent}%` }}
                     />
-                  ) : (
-                    <p className="text-slate-300 leading-relaxed text-[15px] bg-white/5 border border-white/5 rounded-2xl p-5">
-                      {note.summary || 'No summary available.'}
-                    </p>
-                  )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Total Duration Readout */}
+            <span className="text-xs font-semibold text-slate-400 font-mono shrink-0 w-9 text-right">
+              {formatMinSec(durationTotal)}
+            </span>
+          </div>
+
+          {/* Navigation Pill Tabs */}
+          <Tabs value={activeTab} onValueChange={(v) => actions.handleTabChange(v as any)} className="w-full">
+            <div className="bg-slate-100/80 dark:bg-slate-800/60 p-1 rounded-xl inline-flex gap-1 mb-4 border border-slate-200/50 dark:border-slate-700/50">
+              <button
+                onClick={() => actions.handleTabChange('summary')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'summary'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Summary
+              </button>
+              <button
+                onClick={() => actions.handleTabChange('transcript')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'transcript'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Transcript
+              </button>
+              <button
+                onClick={() => actions.handleTabChange('tasks')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  activeTab === 'tasks'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Tasks
+              </button>
+            </div>
+
+            {/* TAB CONTENT: SUMMARY (Mockup AI Summary Box) */}
+            <TabsContent value="summary" className="mt-0 space-y-5">
+              <div className="bg-[#F2F5FE] dark:bg-indigo-950/40 border border-indigo-100/80 dark:border-indigo-900/40 rounded-2xl p-6 space-y-4 shadow-xs">
+                <div className="text-[11px] font-extrabold uppercase tracking-widest text-[#4338CA] dark:text-indigo-400">
+                  AI SUMMARY
                 </div>
 
-                {/* Tags section */}
-                {note.tags.length > 0 && (
-                  <div>
-                    <h4 className="text-xs uppercase font-bold text-slate-500 tracking-wider mb-2 flex items-center gap-1">
-                      <Tag className="w-3.5 h-3.5" /> Tags
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {note.tags.map((t, idx) => (
-                        <Badge key={idx} variant="secondary" className="bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10">
-                          #{t}
-                        </Badge>
-                      ))}
+                {isEditing ? (
+                  <Textarea
+                    value={editedSummary}
+                    onChange={(e) => setEditedSummary(e.target.value)}
+                    className="min-h-32 bg-white dark:bg-slate-900 border-indigo-200 dark:border-indigo-800 text-slate-800 dark:text-slate-100"
+                  />
+                ) : (
+                  <>
+                    <p className="text-slate-700 dark:text-slate-200 leading-relaxed text-[14px]">
+                      {note.summary || 'The team is one step behind on the dashboard because database migrations aren\'t done. John takes the migrations, Sarah continues on components once seeding lands, and the review moves to Friday to give QA a full day.'}
+                    </p>
+
+                    <div className="border-t border-indigo-100/60 dark:border-indigo-900/40 pt-4 space-y-2.5">
+                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#635BFF] mt-1.5 shrink-0" />
+                        <span>Migrations + seeding are the critical path — everything else waits on them.</span>
+                      </div>
+                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#635BFF] mt-1.5 shrink-0" />
+                        <span>Review session moved from Wednesday to Friday 3 PM.</span>
+                      </div>
+                      <div className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#635BFF] mt-1.5 shrink-0" />
+                        <span>QA gets a full day before the demo; no scope added this sprint.</span>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
+              </div>
+
+              {/* Action Buttons Row */}
+              <div className="flex flex-wrap gap-2.5 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copySummaryText}
+                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
+                >
+                  {copiedSummary ? <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" /> : null}
+                  {copiedSummary ? 'Copied summary' : 'Copy summary'}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href);
+                    alert('Note link copied to clipboard!');
+                  }}
+                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+                  Share note
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadMarkdown}
+                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+                  Export tasks
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onOpenCopilot && onOpenCopilot()}
+                  className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
+                >
+                  <MessageSquareShare className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
+                  Ask about this note
+                </Button>
               </div>
             </TabsContent>
 
-            {/* TAB: TRANSCRIPT */}
-            <TabsContent value="transcript" className="mt-4 space-y-4">
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="text-xs uppercase font-bold text-indigo-400 tracking-wider">Full Transcript</h4>
-                  {!isEditing && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => copyToClipboard(note.content)}
-                      className="text-slate-400 hover:text-white h-7 px-2"
-                    >
-                      {copied ? <Check className="w-4 h-4 mr-1 text-emerald-400" /> : <Copy className="w-4 h-4 mr-1" />}
-                      {copied ? 'Copied' : 'Copy'}
-                    </Button>
-                  )}
+            {/* TAB CONTENT: TRANSCRIPT */}
+            <TabsContent value="transcript" className="mt-0 space-y-4">
+              <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">Full Transcript</h4>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(note.content)}
+                    className="text-slate-500 hover:text-slate-800 dark:hover:text-white h-7 px-2"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
                 </div>
                 {isEditing ? (
                   <Textarea
                     value={editedContent}
                     onChange={(e) => setEditedContent(e.target.value)}
-                    className="min-h-64 bg-slate-900/60 border-white/10 text-slate-200 font-sans text-[15px]"
-                    placeholder="Transcript text..."
+                    className="min-h-64 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-sans text-sm"
                   />
                 ) : (
-                  <p className="text-slate-300 leading-relaxed font-sans text-[15px] bg-white/5 border border-white/5 rounded-2xl p-5 whitespace-pre-wrap">
+                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed font-sans text-sm whitespace-pre-wrap">
                     {note.content}
                   </p>
                 )}
               </div>
             </TabsContent>
 
-            {/* TAB: KEY POINTS & TASKS */}
-            <TabsContent value="tasks" className="mt-4 space-y-5">
-              {/* Takeaways List */}
+            {/* TAB CONTENT: TASKS */}
+            <TabsContent value="tasks" className="mt-0 space-y-4">
               {note.bulletPoints && (
-                <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
-                  <h4 className="text-xs uppercase font-bold text-indigo-400 tracking-wider mb-3">Key Takeaways</h4>
-                  <ul className="list-disc pl-5 space-y-2 text-slate-300 text-[14px]">
+                <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-5">
+                  <h4 className="text-xs uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider mb-3">Extracted Action Items</h4>
+                  <ul className="space-y-2.5 text-slate-700 dark:text-slate-300 text-sm">
                     {note.bulletPoints.split('\n').filter(Boolean).map((pt, idx) => (
-                      <li key={idx} className="leading-relaxed">{pt.replace(/^-\s*/, '')}</li>
+                      <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 shrink-0" />
+                        <span>{pt.replace(/^•\s*/, '')}</span>
+                      </li>
                     ))}
                   </ul>
                 </div>
               )}
-
-              {/* Action Items List */}
-              {note.actionItems && (
-                <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
-                  <h4 className="text-xs uppercase font-bold text-emerald-400 tracking-wider mb-3 flex items-center gap-1.5">
-                    <ListTodo className="w-4 h-4" /> Action Items
-                  </h4>
-                  <ul className="list-decimal pl-5 space-y-2 text-slate-300 text-[14px]">
-                    {note.actionItems.split('\n').filter(Boolean).map((item, idx) => (
-                      <li key={idx} className="leading-relaxed">{item.replace(/^\d+\.\s*/, '')}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* TAB: AI REWRITE */}
-            <TabsContent value="rewrite" className="mt-4 space-y-4">
-              <div className="bg-white/5 border border-white/5 rounded-2xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1">
-                    <Select value={rewriteMode} onValueChange={(v) => actions.handleRewriteModeChange(v || '')}>
-                      <SelectTrigger className="bg-slate-900 border-white/10 text-white rounded-xl">
-                        <SelectValue placeholder="Select rewrite format" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-950 border-white/10 text-white">
-                        {REWRITE_MODES.map((mode) => (
-                          <SelectItem key={mode.id} value={mode.id}>
-                            {mode.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    onClick={() => actions.triggerRewrite(selectedRewritePreset?.prompt || '')}
-                    disabled={rewriting}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shrink-0"
-                  >
-                    {rewriting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <Wand2 className="w-4 h-4 mr-1.5" />
-                        Reformat Note
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Rewriter output area */}
-                {rewrittenText ? (
-                  <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 relative space-y-2 animate-in fade-in-50 duration-200">
-                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                      <span className="text-xs uppercase font-bold text-indigo-400">AI Draft Output</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToClipboard(rewrittenText)}
-                        className="text-slate-400 hover:text-white h-7 px-2"
-                      >
-                        {copied ? <Check className="w-4 h-4 mr-1 text-emerald-400" /> : <Copy className="w-4 h-4 mr-1" />}
-                        {copied ? 'Copied' : 'Copy Draft'}
-                      </Button>
-                    </div>
-                    <p className="text-slate-300 leading-relaxed font-mono text-xs whitespace-pre-wrap select-all py-2">
-                      {rewrittenText}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-slate-500 text-xs italic">
-                    Select a format preset and click &quot;Reformat Note&quot; to transform this voice note using AI.
-                  </div>
-                )}
-              </div>
             </TabsContent>
           </Tabs>
 
         </div>
       </ScrollArea>
-
-      {/* Footer Editor Buttons */}
-      <div className="p-4 border-t border-white/5 flex justify-end gap-3 bg-slate-900/60 z-10">
-        {isEditing ? (
-          <>
-            <Button
-              variant="outline"
-              disabled={saving}
-              onClick={() => actions.handleCancelEdit()}
-              className="border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white rounded-xl"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => actions.handleSave()}
-              disabled={saving}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </Button>
-          </>
-        ) : (
-          <Button
-            onClick={() => actions.handleStartEdit()}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl"
-          >
-            Edit Content
-          </Button>
-        )}
-      </div>
 
     </div>
   );

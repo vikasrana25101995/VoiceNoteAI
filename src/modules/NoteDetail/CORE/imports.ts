@@ -20,5 +20,6 @@ export {
   X,
   Plus,
   Wand2,
-  ListTodo
+  ListTodo,
+  MessageSquareShare
 } from 'lucide-react';
