@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "prisma/schema.prisma"
+  schedule:
+    - cron: "0 */6 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -16,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+      - run: npm install --ignore-scripts
       - run: npx prisma db push
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
