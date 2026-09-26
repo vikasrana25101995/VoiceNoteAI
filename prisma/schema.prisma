@@ -10,26 +10,11 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  name         String?
-  passwordHash String?
-  image        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  folders      Folder[]
-  notes        Note[]
-  tasks        Task[]
-  chatMessages ChatMessage[]
-}
-
 model Folder {
   id        String   @id @default(uuid())
   name      String
   color     String?  // hex or tailwind class name
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String // Supabase auth.users id
   createdAt DateTime @default(now())
   notes     Note[]
 
@@ -46,8 +31,7 @@ model Note {
   audioUrl     String?
   duration     Int?          // audio duration in seconds
   tags         String[]      // tags list (PostgreSQL specific)
-  userId       String
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String // Supabase auth.users id
   folderId     String?
   folder       Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
   createdAt    DateTime      @default(now())
@@ -63,8 +47,7 @@ model Task {
   isCompleted Boolean   @default(false)
   noteId      String
   note        Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String // Supabase auth.users id
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -75,15 +58,6 @@ model ChatMessage {
   response  String   @db.Text
   noteId    String?
   note      Note?    @relation(fields: [noteId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-}
-
-model PasswordResetToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  email     String
-  expiresAt DateTime
+  userId    String // Supabase auth.users id
   createdAt DateTime @default(now())
 }

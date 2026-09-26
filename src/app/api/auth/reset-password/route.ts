@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { hashPassword } from '@/lib/auth';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
@@ -21,49 +20,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const resetRecord = await prisma.passwordResetToken.findUnique({
-      where: { token },
-    });
+    // token is the recovery access_token from the Supabase email link
+    const supabase = supabaseAdmin();
+    const { data, error } = await supabase.auth.getUser(token);
 
-    if (!resetRecord) {
+    if (error || !data.user) {
       return NextResponse.json(
-        { error: 'Invalid or expired password reset link' },
+        { error: 'Invalid or expired password reset link. Please request a new one.' },
         { status: 400 }
       );
     }
 
-    if (new Date() > new Date(resetRecord.expiresAt)) {
-      await prisma.passwordResetToken.delete({
-        where: { id: resetRecord.id },
-      });
-      return NextResponse.json(
-        { error: 'Password reset link has expired. Please request a new one.' },
-        { status: 400 }
-      );
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: resetRecord.email },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User account not found' },
-        { status: 404 }
-      );
-    }
-
-    const hashedPassword = await hashPassword(password);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: hashedPassword },
-    });
-
-    // Clean up reset token
-    await prisma.passwordResetToken.delete({
-      where: { id: resetRecord.id },
-    });
+    const { error: updateError } = await supabase.auth.admin.updateUserById(data.user.id, { password });
+    if (updateError) throw updateError;
 
     return NextResponse.json({
       success: true,

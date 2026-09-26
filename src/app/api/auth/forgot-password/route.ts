@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import crypto from 'crypto';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
@@ -16,43 +15,14 @@ export async function POST(request: Request) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+    // Supabase emails a link to /reset-password#access_token=...&type=recovery
+    const origin = request.headers.get('origin') || 'http://localhost:3000';
+    const { error } = await supabaseAdmin().auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo: `${origin}/reset-password`,
     });
+    if (error) console.error('Supabase resetPasswordForEmail error:', error);
 
-    // Always respond with success to prevent email enumeration,
-    // but only create token if user exists
-    if (user) {
-      const token = crypto.randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-      // Delete existing tokens for this email
-      await prisma.passwordResetToken.deleteMany({
-        where: { email: normalizedEmail },
-      });
-
-      // Create new reset token
-      await prisma.passwordResetToken.create({
-        data: {
-          token,
-          email: normalizedEmail,
-          expiresAt,
-        },
-      });
-
-      // In production, send email using SendGrid/Resend/Postmark etc.
-      const origin = request.headers.get('origin') || 'http://localhost:3000';
-      const resetUrl = `${origin}/reset-password?token=${token}`;
-      console.log(`[Dev] Password reset URL for ${normalizedEmail}: ${resetUrl}`);
-
-      return NextResponse.json({
-        success: true,
-        message: 'If an account exists with that email, a password reset link has been sent.',
-        devResetUrl: process.env.NODE_ENV !== 'production' ? resetUrl : undefined,
-      });
-    }
-
+    // Always respond with success to prevent email enumeration
     return NextResponse.json({
       success: true,
       message: 'If an account exists with that email, a password reset link has been sent.',

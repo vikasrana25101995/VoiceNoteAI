@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { createSession } from '@/lib/session';
 
 export async function POST() {
@@ -9,19 +8,8 @@ export async function POST() {
     const email = 'google.user@voicenote.ai';
     const name = 'Google User';
 
-    let user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          email,
-          name,
-          image: 'https://lh3.googleusercontent.com/a/default-user',
-        },
-      });
-    }
+    // ponytail: demo stub, not real Google OAuth. Replace with supabase.auth.signInWithOAuth({ provider: 'google' }) + callback route.
+    const user = { id: 'google-demo-user-id', email, name };
 
     await createSession(user.id, user.email, user.name);
 

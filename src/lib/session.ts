@@ -8,6 +8,7 @@ export interface SessionPayload {
   userId: string;
   email: string;
   name?: string | null;
+  image?: string | null;
   expiresAt: string;
 }
 
@@ -31,8 +32,8 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
   }
 }
 
-export async function createSession(userId: string, email: string, name?: string | null) {
-  const token = await encryptSession({ userId, email, name });
+export async function createSession(userId: string, email: string, name?: string | null, image?: string | null) {
+  const token = await encryptSession({ userId, email, name, image });
   const cookieStore = await cookies();
   cookieStore.set('voicenote_session', token, {
     httpOnly: true,

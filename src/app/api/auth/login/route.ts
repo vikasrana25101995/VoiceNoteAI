@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { verifyPassword } from '@/lib/auth';
+import { supabaseAdmin } from '@/lib/supabase';
 import { createSession } from '@/lib/session';
 
 export async function POST(request: Request) {
@@ -17,25 +16,23 @@ export async function POST(request: Request) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+    const { data, error } = await supabaseAdmin().auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
     });
 
-    if (!user || !user.passwordHash) {
+    if (error || !data.user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
-    const isValidPassword = await verifyPassword(password, user.passwordHash);
-
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
+    const user = {
+      id: data.user.id,
+      email: data.user.email ?? normalizedEmail,
+      name: (data.user.user_metadata?.name as string | undefined) ?? null,
+    };
 
     await createSession(user.id, user.email, user.name);
 

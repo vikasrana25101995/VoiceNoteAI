@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ResetPasswordFormData } from './types';
 import { resetPasswordActions } from './actions';
 
 export function useResetPasswordForm() {
   const searchParams = useSearchParams();
-  const token = searchParams.get('token') || '';
+  // Supabase recovery links put the token in the hash: #access_token=...&type=recovery
+  const hash = useSyncExternalStore(() => () => {}, () => window.location.hash, () => '');
+  const token = searchParams.get('token') || new URLSearchParams(hash.slice(1)).get('access_token') || '';
 
   const [formData, setFormData] = useState<ResetPasswordFormData>({
     token,

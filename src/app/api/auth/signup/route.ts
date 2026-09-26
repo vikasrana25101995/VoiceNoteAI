@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { hashPassword } from '@/lib/auth';
+import { supabaseAdmin } from '@/lib/supabase';
 import { createSession } from '@/lib/session';
 
 export async function POST(request: Request) {
@@ -31,33 +30,32 @@ export async function POST(request: Request) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+    const trimmedName = name ? name.trim() : null;
+
+    // email_confirm: true keeps the current "sign up and go straight in" flow (no verification email)
+    const { data, error } = await supabaseAdmin().auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { name: trimmedName },
     });
 
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'An account with this email address already exists' },
-        { status: 409 }
-      );
+    if (error) {
+      if (error.code === 'email_exists' || error.status === 422) {
+        return NextResponse.json(
+          { error: 'An account with this email address already exists' },
+          { status: 409 }
+        );
+      }
+      throw error;
     }
 
-    const hashedPassword = await hashPassword(password);
-
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        name: name ? name.trim() : null,
-        passwordHash: hashedPassword,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-      },
-    });
+    const user = {
+      id: data.user.id,
+      email: normalizedEmail,
+      name: trimmedName,
+      createdAt: data.user.created_at,
+    };
 
     // Create session cookie
     await createSession(user.id, user.email, user.name);
