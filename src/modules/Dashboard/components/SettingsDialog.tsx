@@ -101,46 +101,40 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] bg-slate-950/95 border-white/10 p-6 text-white rounded-2xl overflow-hidden shadow-2xl relative">
-        {/* Glow styling inside the modal */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
-          <div className="absolute -top-32 -right-32 w-64 h-64 bg-indigo-500/10 rounded-full blur-[80px]" />
-          <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-purple-500/10 rounded-full blur-[80px]" />
-        </div>
-
-        <DialogHeader className="relative z-10 space-y-1.5">
-          <DialogTitle className="text-lg font-bold flex items-center gap-2">
-            <Key className="w-5 h-5 text-indigo-400" />
+      <DialogContent className="sm:max-w-[480px] bg-white ring-neutral-200/80 p-6 text-neutral-900 rounded-2xl overflow-hidden shadow-2xl">
+        <DialogHeader className="gap-1.5 pr-6">
+          <DialogTitle className="text-2xl font-serif font-normal tracking-tight text-neutral-900 flex items-center gap-2">
+            <Key className="w-5 h-5 text-[#234B36]" />
             AI Provider Settings
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-450 leading-relaxed">
+          <DialogDescription className="text-xs text-neutral-500 leading-relaxed">
             Configure custom API keys to power note transcriptions, AI summaries, and your copilot chat. Keys are stored locally in your browser.
           </DialogDescription>
         </DialogHeader>
 
         {loading ? (
-          <div className="py-12 flex flex-col items-center justify-center gap-3 relative z-10">
-            <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-            <span className="text-xs text-slate-400">Loading settings...</span>
+          <div className="py-12 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-6 h-6 text-[#234B36] animate-spin" />
+            <span className="text-xs text-neutral-500">Loading settings...</span>
           </div>
         ) : (
-          <div className="space-y-5 my-4 relative z-10">
+          <div className="space-y-5 my-2">
             {/* OpenAI API Key Section */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <Label htmlFor="openai-key" className="text-xs font-bold text-slate-200">
+                <Label htmlFor="openai-key" className="text-xs font-semibold text-neutral-700">
                   OpenAI API Key
                 </Label>
                 {hasSavedOpenAI ? (
-                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[10px] border border-emerald-200/80 bg-emerald-50/60 text-emerald-900 px-2 py-0.5 rounded-full font-semibold">
                     Custom Key Active
                   </span>
                 ) : serverHasOpenAIKey ? (
-                  <span className="text-[10px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[10px] border border-neutral-200 bg-white text-neutral-600 px-2 py-0.5 rounded-full font-semibold">
                     Default Server Key Active
                   </span>
                 ) : (
-                  <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                  <span className="text-[10px] border border-amber-200 bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
                     <ShieldAlert className="w-3 h-3" /> Key Required
                   </span>
                 )}
@@ -152,17 +146,17 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
                   placeholder={serverHasOpenAIKey ? 'Using server default key' : 'sk-...'}
                   value={openAIKey}
                   onChange={(e) => setOpenAIKey(e.target.value)}
-                  className="bg-slate-900 border-white/5 pr-10 text-xs text-slate-100 rounded-xl focus-visible:ring-indigo-500 focus-visible:border-indigo-500"
+                  className="h-10 bg-white border-neutral-200 pr-10 text-xs text-neutral-900 placeholder:text-neutral-400 rounded-xl shadow-2xs focus-visible:ring-1 focus-visible:ring-[#234B36] focus-visible:border-[#234B36]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowOpenAI(!showOpenAI)}
-                  className="absolute right-3 top-2.5 text-slate-450 hover:text-white transition cursor-pointer"
+                  className="absolute inset-y-0 right-3 flex items-center text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
                 >
                   {showOpenAI ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[11px] text-neutral-500">
                 Used for Whisper transcription, note analysis, and note Copilot chat.
               </p>
             </div>
@@ -170,11 +164,11 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
             {/* Gemini API Key Section */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <Label htmlFor="gemini-key" className="text-xs font-bold text-slate-200">
+                <Label htmlFor="gemini-key" className="text-xs font-semibold text-neutral-700">
                   Google Gemini API Key
                 </Label>
                 {hasSavedGemini && (
-                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[10px] border border-emerald-200/80 bg-emerald-50/60 text-emerald-900 px-2 py-0.5 rounded-full font-semibold">
                     Custom Key Active
                   </span>
                 )}
@@ -186,17 +180,17 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
                   placeholder="AIzaSy..."
                   value={geminiKey}
                   onChange={(e) => setGeminiKey(e.target.value)}
-                  className="bg-slate-900 border-white/5 pr-10 text-xs text-slate-100 rounded-xl focus-visible:ring-indigo-500 focus-visible:border-indigo-500"
+                  className="h-10 bg-white border-neutral-200 pr-10 text-xs text-neutral-900 placeholder:text-neutral-400 rounded-xl shadow-2xs focus-visible:ring-1 focus-visible:ring-[#234B36] focus-visible:border-[#234B36]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowGemini(!showGemini)}
-                  className="absolute right-3 top-2.5 text-slate-450 hover:text-white transition cursor-pointer"
+                  className="absolute inset-y-0 right-3 flex items-center text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
                 >
                   {showGemini ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[11px] text-neutral-500">
                 For Google Gemini model integrations (optional).
               </p>
             </div>
@@ -204,11 +198,11 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
             {/* Anthropic API Key Section */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <Label htmlFor="anthropic-key" className="text-xs font-bold text-slate-200">
+                <Label htmlFor="anthropic-key" className="text-xs font-semibold text-neutral-700">
                   Anthropic Claude API Key
                 </Label>
                 {hasSavedAnthropic && (
-                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-[10px] border border-emerald-200/80 bg-emerald-50/60 text-emerald-900 px-2 py-0.5 rounded-full font-semibold">
                     Custom Key Active
                   </span>
                 )}
@@ -220,28 +214,28 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
                   placeholder="sk-ant-..."
                   value={anthropicKey}
                   onChange={(e) => setAnthropicKey(e.target.value)}
-                  className="bg-slate-900 border-white/5 pr-10 text-xs text-slate-100 rounded-xl focus-visible:ring-indigo-500 focus-visible:border-indigo-500"
+                  className="h-10 bg-white border-neutral-200 pr-10 text-xs text-neutral-900 placeholder:text-neutral-400 rounded-xl shadow-2xs focus-visible:ring-1 focus-visible:ring-[#234B36] focus-visible:border-[#234B36]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowAnthropic(!showAnthropic)}
-                  className="absolute right-3 top-2.5 text-slate-450 hover:text-white transition cursor-pointer"
+                  className="absolute inset-y-0 right-3 flex items-center text-neutral-400 hover:text-neutral-700 transition cursor-pointer"
                 >
                   {showAnthropic ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[11px] text-neutral-500">
                 For Anthropic Claude model integrations (optional).
               </p>
             </div>
           </div>
         )}
 
-        <DialogFooter className="relative z-10 flex flex-col-reverse sm:flex-row gap-2 mt-6">
+        <DialogFooter className="-mx-6 -mb-6 mt-2 px-6 py-4 bg-[#FAFAF8] border-neutral-200/70 rounded-b-2xl">
           <Button
             variant="ghost"
             onClick={handleClear}
-            className="text-xs hover:bg-white/5 text-slate-400 hover:text-white rounded-xl border border-white/5 sm:mr-auto cursor-pointer"
+            className="text-xs font-semibold text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 rounded-xl sm:mr-auto cursor-pointer"
           >
             Reset to Defaults
           </Button>
@@ -250,13 +244,13 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="text-xs border-white/10 hover:bg-white/5 text-slate-300 rounded-xl cursor-pointer"
+              className="text-xs font-semibold bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50 rounded-xl shadow-2xs cursor-pointer"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 cursor-pointer"
+              className="text-xs bg-[#234B36] hover:bg-[#1A3A2A] text-white font-semibold rounded-xl flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
               {saveSuccess ? (
                 <>

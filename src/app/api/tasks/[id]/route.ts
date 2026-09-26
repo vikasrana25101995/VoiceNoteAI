@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getOrCreateDefaultUser } from '@/lib/user';
+import { requireUser } from '@/lib/user';
 import { memoryDb } from '@/lib/memoryDb';
 
 export async function PATCH(
@@ -18,7 +18,8 @@ export async function PATCH(
   const { isCompleted } = body;
 
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const task = await prisma.task.findUnique({
       where: {
@@ -55,7 +56,8 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const task = await prisma.task.findUnique({
       where: {

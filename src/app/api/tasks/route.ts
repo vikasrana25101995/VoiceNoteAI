@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getOrCreateDefaultUser } from '@/lib/user';
+import { requireUser } from '@/lib/user';
 import { memoryDb } from '@/lib/memoryDb';
 
 export async function GET() {
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const tasks = await prisma.task.findMany({
       where: {
@@ -46,7 +47,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const task = await prisma.task.create({
       data: {
         content,

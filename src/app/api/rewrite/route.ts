@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getOrCreateDefaultUser } from '@/lib/user';
+import { requireUser } from '@/lib/user';
 import OpenAI from 'openai';
 
 async function rewriteWithGemini(noteContent: string, prompt: string, apiKey: string) {
@@ -24,7 +24,8 @@ async function rewriteWithGemini(noteContent: string, prompt: string, apiKey: st
 
 export async function POST(request: Request) {
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
     const { noteId, mode, prompt } = body;
 

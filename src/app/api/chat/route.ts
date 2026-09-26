@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { chatWithNotes } from '@/lib/ai';
 import { prisma } from '@/lib/db';
-import { getOrCreateDefaultUser } from '@/lib/user';
+import { requireUser } from '@/lib/user';
 import { memoryDb } from '@/lib/memoryDb';
 
 export async function POST(request: Request) {
@@ -23,7 +23,8 @@ export async function POST(request: Request) {
   let notesContext: Array<{ title: string; content: string; summary: string | null }> = [];
 
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     if (noteId) {
       // Chat in context of a single note

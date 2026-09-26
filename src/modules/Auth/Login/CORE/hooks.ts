@@ -17,7 +17,9 @@ export function useLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(
+    searchParams.get('error') === 'google' ? 'Google sign-in failed. Please try again.' : null
+  );
 
   const handleInputChange = (field: keyof LoginFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

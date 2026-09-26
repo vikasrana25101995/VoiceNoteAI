@@ -22,19 +22,10 @@ export class SignupService {
     return result;
   }
 
-  async loginWithGoogle(): Promise<SignupResponse> {
-    const response = await fetch('/api/auth/google', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to sign in with Google');
-    }
-    return result;
+  // Full-page redirect to Google; the promise never resolves so the button keeps its loading state.
+  loginWithGoogle(): Promise<SignupResponse> {
+    window.location.assign('/api/auth/google');
+    return new Promise<SignupResponse>(() => {});
   }
 }
 

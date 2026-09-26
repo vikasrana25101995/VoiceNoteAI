@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getOrCreateDefaultUser } from '@/lib/user';
+import { requireUser } from '@/lib/user';
 import { memoryDb } from '@/lib/memoryDb';
 
 export async function GET(
@@ -9,7 +9,8 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const note = await prisma.note.findUnique({
       where: {
@@ -49,10 +50,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { title, content, summary, bulletPoints, actionItems, folderId, tags } = body;
+  const { title, content, summary, bulletPoints, actionItems, todos, folderId, tags } = body;
 
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const note = await prisma.note.findUnique({
       where: {
@@ -73,6 +75,7 @@ export async function PATCH(
         summary: summary !== undefined ? summary : note.summary,
         bulletPoints: bulletPoints !== undefined ? bulletPoints : note.bulletPoints,
         actionItems: actionItems !== undefined ? actionItems : note.actionItems,
+        todos: todos !== undefined ? todos : note.todos,
         tags: tags !== undefined ? tags : note.tags,
         folderId: folderId !== undefined ? (folderId === 'unassigned' ? null : folderId) : note.folderId,
       },
@@ -87,6 +90,7 @@ export async function PATCH(
       summary,
       bulletPoints,
       actionItems,
+      todos,
       tags,
       folderId,
     });
@@ -103,7 +107,8 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const note = await prisma.note.findUnique({
       where: {

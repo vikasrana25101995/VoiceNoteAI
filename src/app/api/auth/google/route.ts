@@ -1,32 +1,18 @@
 import { NextResponse } from 'next/server';
-import { createSession } from '@/lib/session';
+import { supabaseOAuth } from '@/lib/supabase';
 
-export async function POST() {
-  try {
-    // In production, exchange Google OAuth code / token for user info.
-    // For local dev / demo experience, log in or create a demo Google user:
-    const email = 'google.user@voicenote.ai';
-    const name = 'Google User';
+// Starts Google sign-in: redirects the browser to Google via Supabase, which returns to /api/auth/callback.
+export async function GET(request: Request) {
+  const origin = new URL(request.url).origin;
+  const supabase = await supabaseOAuth();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: `${origin}/api/auth/callback`, skipBrowserRedirect: true },
+  });
 
-    // ponytail: demo stub, not real Google OAuth. Replace with supabase.auth.signInWithOAuth({ provider: 'google' }) + callback route.
-    const user = { id: 'google-demo-user-id', email, name };
-
-    await createSession(user.id, user.email, user.name);
-
-    return NextResponse.json({
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-      message: 'Signed in with Google',
-    });
-  } catch (error: any) {
-    console.error('Google auth error:', error);
-    return NextResponse.json(
-      { error: error?.message || 'Google authentication failed' },
-      { status: 500 }
-    );
+  if (error || !data.url) {
+    console.error('Google OAuth start error:', error);
+    return NextResponse.redirect(new URL('/login?error=google', origin));
   }
+  return NextResponse.redirect(data.url);
 }

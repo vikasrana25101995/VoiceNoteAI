@@ -25,13 +25,16 @@ import {
   CheckSquare,
   Send,
   Square,
-  MessageSquare
+  MessageSquare,
+  CalendarDays
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { noteDetailService } from './CORE/services';
+import { usePrompt } from '@/components/usePrompt';
+import { parseTodoLine, formatTodoLine, todayISO, formatDue, type TodoLine } from './CORE/todoLine';
 
 interface NoteDetailProps {
   noteId: string | null;
@@ -80,8 +83,10 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
   const [isExtractingTodos, setIsExtractingTodos] = useState(false);
   const [isTodoMode, setIsTodoMode] = useState(false);
   const [newCanvasTodoText, setNewCanvasTodoText] = useState('');
+  const [todoContent, setTodoContent] = useState('');
   const [addType, setAddType] = useState<'item' | 'heading'>('item');
   const [keepWritingText, setKeepWritingText] = useState('');
+  const [ask, promptDialog] = usePrompt();
 
   // Tags State
   const [tags, setTags] = useState<string[]>(['Work']);
@@ -100,6 +105,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
   useEffect(() => {
     if (note) {
       setTags(note.tags || []);
+      setTodoContent(note.todos || '');
       setCompletedActions({});
       setChatMessages([]);
     }
@@ -282,6 +288,12 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
     }
   };
 
+  const saveTodos = (updated: string) => {
+    setTodoContent(updated);
+    noteDetailService.updateNote(note.id, { todos: updated });
+    if (onNoteUpdated) onNoteUpdated();
+  };
+
   // Extract To-dos / Action Items with AI
   const handleExtractTodos = async () => {
     setIsAssistantOpen(true);
@@ -311,9 +323,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
           if (isTodoMode) {
             const newLines = data.actionItems.map((item: string) => `- [ ] ${item}`).join('\n');
-            const updatedContent = editedContent ? `${editedContent}\n${newLines}` : newLines;
-            setEditedContent(updatedContent);
-            await noteDetailService.updateNote(note.id, { content: updatedContent });
+            saveTodos(todoContent ? `${todoContent}\n${newLines}` : newLines);
           }
 
           if (onNoteUpdated) onNoteUpdated();
@@ -431,7 +441,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
   };
 
   // Count completed and total todo items for To-do mode header
-  const allContentLines = (editedContent || '').split('\n').filter((l) => l.trim().length > 0);
+  const allContentLines = (todoContent || '').split('\n').filter((l) => l.trim().length > 0);
   const todoItemsOnly = allContentLines.filter((l) => !/^(#{1,6}\s|\[heading\]|\[section\])/i.test(l.trim()));
   const totalTodoCount = todoItemsOnly.length;
   const completedTodoCount = todoItemsOnly.filter((l) => /^(- \[[xX]\]|\[[xX]\])/.test(l.trim())).length;
@@ -453,17 +463,15 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
       ? `## ${newCanvasTodoText.trim()}`
       : `- [ ] ${newCanvasTodoText.trim()}`;
 
-    const lines = (editedContent || '').split('\n').filter(Boolean);
+    const lines = (todoContent || '').split('\n').filter(Boolean);
     lines.push(lineToAdd);
-    const updated = lines.join('\n');
-    setEditedContent(updated);
     setNewCanvasTodoText('');
-    noteDetailService.updateNote(note.id, { content: updated });
-    if (onNoteUpdated) onNoteUpdated();
+    saveTodos(lines.join('\n'));
   };
 
   return (
     <div className="w-full h-full flex flex-col bg-white border border-neutral-200/80 rounded-2xl overflow-hidden shadow-xs text-neutral-900">
+      {promptDialog}
 
       {/* TOP BAR HEADER (Crisp White Background) */}
       <div className="h-14 px-6 border-b border-neutral-200/70 flex items-center justify-between bg-white shrink-0">
@@ -555,12 +563,17 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                   <span>Category: {note.folder?.name || 'Unassigned'}</span>
                   <button
                     onClick={async () => {
-                      const catName = prompt('Enter Category/Folder name:');
-                      if (catName !== null && catName.trim()) {
+                      const catName = await ask({
+                        title: 'Change category',
+                        description: 'Move this note into a category. A new one is created if it does not exist.',
+                        placeholder: 'e.g. Work',
+                        confirmLabel: 'Move note',
+                      });
+                      if (catName) {
                         const folderRes = await fetch('/api/folders', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ name: catName.trim() }),
+                          body: JSON.stringify({ name: catName }),
                         });
                         const folderObj = await folderRes.json();
                         if (folderObj?.id) {
@@ -678,12 +691,12 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
                   {/* Checklist & Headings Container */}
                   <div className="space-y-2">
-                    {((editedContent || '').split('\n').filter((l) => l.trim().length > 0).length === 0) ? (
+                    {((todoContent || '').split('\n').filter((l) => l.trim().length > 0).length === 0) ? (
                       <div className="p-8 text-center bg-white border border-dashed border-neutral-200 rounded-2xl text-neutral-400 text-sm italic">
                         No to-do items yet. Add an item below or extract to-dos from AI!
                       </div>
                     ) : (
-                      (editedContent || '').split('\n').map((line, idx) => {
+                      (todoContent || '').split('\n').map((line, idx) => {
                         if (!line.trim()) return null;
 
                         const isHeading = /^(#{1,6}\s|\[heading\]|\[section\])/i.test(line.trim());
@@ -698,12 +711,9 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const lines = (editedContent || '').split('\n');
+                                  const lines = (todoContent || '').split('\n');
                                   lines.splice(idx, 1);
-                                  const updated = lines.join('\n');
-                                  setEditedContent(updated);
-                                  noteDetailService.updateNote(note.id, { content: updated });
-                                  if (onNoteUpdated) onNoteUpdated();
+                                  saveTodos(lines.join('\n'));
                                 }}
                                 className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-neutral-600 p-0.5 cursor-pointer"
                                 title="Delete section"
@@ -714,8 +724,15 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                           );
                         }
 
-                        const isChecked = /^(- \[[xX]\]|\[[xX]\])/.test(line.trim());
-                        const cleanText = line.replace(/^(- \[[xX\s]\]|\[[xX\s]\]|[•\-\*])\s*/, '');
+                        const todo = parseTodoLine(line);
+                        const isChecked = todo.checked;
+                        const isOverdue = !!todo.due && !isChecked && todo.due < todayISO();
+                        const updateTodo = (changes: Partial<TodoLine>, persist = true) => {
+                          const lines = (todoContent || '').split('\n');
+                          lines[idx] = formatTodoLine({ ...parseTodoLine(lines[idx] || ''), ...changes });
+                          if (persist) saveTodos(lines.join('\n'));
+                          else setTodoContent(lines.join('\n'));
+                        };
 
                         return (
                           <div
@@ -725,17 +742,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const lines = (editedContent || '').split('\n');
-                                  const targetLine = lines[idx] || '';
-                                  const checked = /^(- \[[xX]\]|\[[xX]\])/.test(targetLine.trim());
-                                  const text = targetLine.replace(/^(- \[[xX\s]\]|\[[xX\s]\]|[•\-\*])\s*/, '');
-                                  lines[idx] = checked ? `- [ ] ${text}` : `- [x] ${text}`;
-                                  const updated = lines.join('\n');
-                                  setEditedContent(updated);
-                                  noteDetailService.updateNote(note.id, { content: updated });
-                                  if (onNoteUpdated) onNoteUpdated();
-                                }}
+                                onClick={() => updateTodo({ checked: !isChecked })}
                                 className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
                                   isChecked
                                     ? 'bg-[#234B36] border-[#234B36] text-white'
@@ -747,28 +754,46 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
                               <input
                                 type="text"
-                                value={cleanText}
-                                onChange={(e) => {
-                                  const lines = (editedContent || '').split('\n');
-                                  lines[idx] = isChecked ? `- [x] ${e.target.value}` : `- [ ] ${e.target.value}`;
-                                  setEditedContent(lines.join('\n'));
-                                }}
-                                onBlur={saveNoteChanges}
+                                value={todo.text}
+                                onChange={(e) => updateTodo({ text: e.target.value }, false)}
+                                onBlur={() => saveTodos(todoContent)}
                                 className={`w-full bg-transparent text-base font-sans focus:outline-none border-none ${
                                   isChecked ? 'line-through text-neutral-400' : 'text-neutral-800 font-normal'
                                 }`}
                               />
                             </div>
 
+                            {/* Due date: native picker under a styled pill */}
+                            <label
+                              title={todo.due ? 'Change due date' : 'Add due date'}
+                              className={`relative shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium transition-all cursor-pointer focus-within:opacity-100 focus-within:ring-1 focus-within:ring-[#234B36] ${
+                                todo.due
+                                  ? isOverdue
+                                    ? 'border-red-200 bg-red-50 text-red-700'
+                                    : isChecked
+                                      ? 'border-neutral-200 bg-white text-neutral-400'
+                                      : 'border-neutral-200 bg-white text-neutral-600'
+                                  : 'border-transparent text-neutral-400 hover:text-neutral-600 opacity-0 group-hover:opacity-100'
+                              }`}
+                            >
+                              <CalendarDays className="w-3.5 h-3.5" />
+                              {todo.due && <span>{formatDue(todo.due)}</span>}
+                              <input
+                                type="date"
+                                value={todo.due}
+                                onClick={(e) => e.currentTarget.showPicker?.()}
+                                onChange={(e) => updateTodo({ due: e.target.value })}
+                                aria-label="Due date"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                              />
+                            </label>
+
                             <button
                               type="button"
                               onClick={() => {
-                                const lines = (editedContent || '').split('\n');
+                                const lines = (todoContent || '').split('\n');
                                 lines.splice(idx, 1);
-                                const updated = lines.join('\n');
-                                setEditedContent(updated);
-                                noteDetailService.updateNote(note.id, { content: updated });
-                                if (onNoteUpdated) onNoteUpdated();
+                                saveTodos(lines.join('\n'));
                               }}
                               className="opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-neutral-600 p-1 cursor-pointer"
                               title="Delete to-do"

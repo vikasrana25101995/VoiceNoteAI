@@ -17,7 +17,7 @@ const PUBLIC_PATHS = [
   '/api/auth/reset-password',
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow static files, assets, and public paths

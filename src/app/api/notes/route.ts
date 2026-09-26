@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getOrCreateDefaultUser } from '@/lib/user';
+import { requireUser } from '@/lib/user';
 import { memoryDb } from '@/lib/memoryDb';
 
 export async function GET(request: Request) {
@@ -10,7 +10,8 @@ export async function GET(request: Request) {
   const tag = searchParams.get('tag') || '';
 
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Build the dynamic Prisma query filter
     const whereClause: any = {
@@ -94,7 +95,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const note = await prisma.note.create({
       data: {
         title: title || 'Untitled Note',

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { analyzeTranscript } from '@/lib/ai';
 import { prisma } from '@/lib/db';
-import { getOrCreateDefaultUser } from '@/lib/user';
+import { requireUser } from '@/lib/user';
 import { memoryDb } from '@/lib/memoryDb';
 
 export async function POST(request: Request) {
@@ -24,7 +24,8 @@ export async function POST(request: Request) {
   const analysis = await analyzeTranscript(transcript, customOpenAIKey, customGeminiKey);
 
   try {
-    const user = await getOrCreateDefaultUser();
+    const user = await requireUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // 2. Find or create Folder (recommended category)
     let folderId: string | null = null;

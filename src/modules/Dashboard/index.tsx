@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import NoteDetail from '../NoteDetail';
 import SettingsDialog from './components/SettingsDialog';
+import { usePrompt } from '@/components/usePrompt';
 import { useDashboardState } from './CORE/hooks';
 import { DashboardActions } from './CORE/actions';
 
@@ -42,6 +43,7 @@ function formatTimeAgo(dateString?: string) {
 export default function Dashboard() {
   const state = useDashboardState();
   const actions = new DashboardActions(state);
+  const [ask, promptDialog, confirm] = usePrompt();
 
   const {
     notes,
@@ -283,9 +285,9 @@ export default function Dashboard() {
               </span>
               <button
                 onClick={async () => {
-                  const catName = prompt('New Category name:');
-                  if (catName && catName.trim()) {
-                    const newFolder = await createFolder(catName.trim());
+                  const catName = await ask({ title: 'New category', placeholder: 'e.g. Work', confirmLabel: 'Create' });
+                  if (catName) {
+                    const newFolder = await createFolder(catName);
                     if (newFolder) {
                       setSelectedFolderId(newFolder.id);
                       setActiveLibraryTab('all');
@@ -346,9 +348,9 @@ export default function Dashboard() {
                 TAGS
               </span>
               <button
-                onClick={() => {
-                  const tag = prompt('Filter by tag name:');
-                  if (tag && tag.trim()) setActiveTagFilter(tag.trim());
+                onClick={async () => {
+                  const tag = await ask({ title: 'Filter by tag', placeholder: 'e.g. candidly', confirmLabel: 'Filter' });
+                  if (tag) setActiveTagFilter(tag);
                 }}
                 className="text-[#7CA891] hover:text-white transition-colors"
                 title="Add tag filter"
@@ -494,9 +496,15 @@ export default function Dashboard() {
                       {n.title}
                     </h3>
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        if (confirm('Delete this note?')) {
+                        const ok = await confirm({
+                          title: 'Delete this note?',
+                          description: `"${n.title}" will be permanently deleted. This can't be undone.`,
+                          confirmLabel: 'Delete',
+                          destructive: true,
+                        });
+                        if (ok) {
                           actions.handleDeleteNote(n.id);
                           if (selectedNoteId === n.id) {
                             setSelectedNoteId(notes.find((item) => item.id !== n.id)?.id || null);
@@ -536,12 +544,16 @@ export default function Dashboard() {
         <NoteDetail
           noteId={selectedNoteId}
           onNoteUpdated={refreshAll}
-          onDeleteNote={(id) => {
+          onDeleteNote={async (id) => {
+            const ok = await confirm({ title: 'Delete this note?', confirmLabel: 'Delete', destructive: true });
+            if (!ok) return;
             actions.handleDeleteNote(id);
             setSelectedNoteId(notes.find((n) => n.id !== id)?.id || null);
           }}
         />
       </main>
+
+      {promptDialog}
 
       {/* Settings Modal */}
       <SettingsDialog

@@ -13,7 +13,7 @@ datasource db {
 model Folder {
   id        String   @id @default(uuid())
   name      String
-  color     String?  // hex or tailwind class name
+  color     String? // hex or tailwind class name
   userId    String // Supabase auth.users id
   createdAt DateTime @default(now())
   notes     Note[]
@@ -28,9 +28,10 @@ model Note {
   summary      String?       @db.Text
   bulletPoints String?       @db.Text // bullet points summary
   actionItems  String?       @db.Text // action items summary
+  todos        String?       @db.Text // To-do tab lines ("- [ ] item", "## heading"), separate from content
   audioUrl     String?
-  duration     Int?          // audio duration in seconds
-  tags         String[]      // tags list (PostgreSQL specific)
+  duration     Int? // audio duration in seconds
+  tags         String[] // tags list (PostgreSQL specific)
   userId       String // Supabase auth.users id
   folderId     String?
   folder       Folder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)

@@ -39,10 +39,9 @@ export class DashboardActions {
     return await this.state.createFolder(name, color);
   }
 
+  // Callers confirm first (custom dialog via usePrompt)
   async handleDeleteNote(id: string) {
-    if (confirm('Are you sure you want to delete this note?')) {
-      await this.state.deleteNote(id);
-    }
+    await this.state.deleteNote(id);
   }
 
   async handleCreateTask(content: string, noteId?: string, dueDate?: string, assignee?: string) {

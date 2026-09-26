@@ -15,6 +15,7 @@ export interface Note {
   summary?: string | null;
   bulletPoints?: string | null;
   actionItems?: string | null;
+  todos?: string | null;
   audioUrl?: string | null;
   duration?: number | null;
   tags: string[];
