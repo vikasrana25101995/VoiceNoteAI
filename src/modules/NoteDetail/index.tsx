@@ -110,6 +110,9 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
   // Dynamic Recording State
   const [isRecording, setIsRecording] = useState(false);
+  // Record pill can be dragged anywhere inside the editor pane; offset is from its default bottom-centre spot.
+  const [pillOffset, setPillOffset] = useState({ x: 0, y: 0 });
+  const pillDrag = useRef<{ startX: number; startY: number; minX: number; maxX: number; minY: number; maxY: number } | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -550,8 +553,8 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
         {/* MAIN EDITOR CANVAS (Left Pane - Soft Warm Ivory `#FAFAF8`) */}
         <div className="flex-1 flex flex-col relative overflow-hidden bg-[#FAFAF8]">
-          <ScrollArea className="flex-1 p-8 md:p-12 pb-32">
-            <div className="max-w-3xl space-y-6">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="max-w-3xl space-y-6 p-8 md:p-12 pb-32 md:pb-32">
 
               {/* Document Title (Serif Display Font - Instrument Serif with Fixed Width) */}
               <div className="w-full min-w-0 max-w-full overflow-hidden">
@@ -919,8 +922,39 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
           </ScrollArea>
 
           {/* FLOATING BOTTOM VOICE RECORDING CAPSULE (Centered Pill Widget matching PDF) */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-full max-w-sm px-4">
-            <div className="bg-[#1A1A1A] text-white rounded-full p-2 pl-5 pr-2.5 shadow-2xl flex items-center justify-between border border-white/10 backdrop-blur-md">
+          <div
+            className="absolute bottom-6 left-1/2 z-20 w-full max-w-sm px-4 pointer-events-none"
+            style={{ transform: `translate(calc(-50% + ${pillOffset.x}px), ${pillOffset.y}px)` }}
+          >
+            <div
+              title="Drag to move"
+              onPointerDown={(e) => {
+                if ((e.target as HTMLElement).closest('button')) return;
+                // Clamp the drag so the pill stays inside the editor pane.
+                const pill = e.currentTarget.getBoundingClientRect();
+                const pane = e.currentTarget.parentElement!.parentElement!.getBoundingClientRect();
+                pillDrag.current = {
+                  startX: e.clientX - pillOffset.x,
+                  startY: e.clientY - pillOffset.y,
+                  minX: pillOffset.x + pane.left - pill.left,
+                  maxX: pillOffset.x + pane.right - pill.right,
+                  minY: pillOffset.y + pane.top - pill.top,
+                  maxY: pillOffset.y + pane.bottom - pill.bottom,
+                };
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onPointerMove={(e) => {
+                const d = pillDrag.current;
+                if (!d) return;
+                setPillOffset({
+                  x: Math.min(d.maxX, Math.max(d.minX, e.clientX - d.startX)),
+                  y: Math.min(d.maxY, Math.max(d.minY, e.clientY - d.startY)),
+                });
+              }}
+              onPointerUp={() => (pillDrag.current = null)}
+              onPointerCancel={() => (pillDrag.current = null)}
+              className="pointer-events-auto touch-none select-none cursor-grab active:cursor-grabbing bg-[#1A1A1A] text-white rounded-full p-2 pl-5 pr-2.5 shadow-2xl flex items-center justify-between border border-white/10 backdrop-blur-md"
+            >
               {/* Equalizer Bars Graphic */}
               <div className="flex items-center gap-1 h-5">
                 {[50, 80, 40, 100, 70, 90, 60, 45].map((h, i) => (
