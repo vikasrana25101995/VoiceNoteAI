@@ -36,15 +36,16 @@ import { noteDetailService } from './CORE/services';
 import { usePrompt } from '@/components/usePrompt';
 import { parseTodoLine, formatTodoLine, todayISO, formatDue, type TodoLine } from './CORE/todoLine';
 
-// Grow a textarea to fit its wrapped text (to-dos are stored one per line, so no real newlines).
+// Grow a textarea to fit its text as it wraps or gains Shift+Enter line breaks.
 // ponytail: doesn't re-measure on window resize; add a ResizeObserver if that matters.
 const autoGrow = (el: HTMLTextAreaElement | null) => {
   if (!el) return;
   el.style.height = 'auto';
   el.style.height = `${el.scrollHeight}px`;
 };
+// Enter saves (blurs); Shift+Enter inserts a line break where the field allows it.
 const blurOnEnter = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-  if (e.key === 'Enter') {
+  if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     e.currentTarget.blur();
   }
@@ -798,7 +799,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                                 value={todo.text}
                                 onChange={(e) => {
                                   autoGrow(e.currentTarget);
-                                  updateTodo({ text: e.target.value.replace(/\n/g, ' ') }, false);
+                                  updateTodo({ text: e.target.value }, false);
                                 }}
                                 onKeyDown={blurOnEnter}
                                 onBlur={() => saveTodos(todoContent)}

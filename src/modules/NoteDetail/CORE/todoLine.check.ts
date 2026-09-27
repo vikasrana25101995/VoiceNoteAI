@@ -8,4 +8,8 @@ assert.deepEqual(parseTodoLine('• legacy bullet'), { checked: false, text: 'le
 for (const line of ['- [ ] a @due(2026-01-02)', '- [x] b', '- [ ] email me@due.com']) {
   assert.equal(formatTodoLine(parseTodoLine(line)), line);
 }
+// Shift+Enter line breaks survive a save round trip without splitting the stored line
+const multi = formatTodoLine({ checked: false, text: 'first\nsecond', due: '2026-01-02' });
+assert.ok(!multi.includes('\n'));
+assert.deepEqual(parseTodoLine(multi), { checked: false, text: 'first\nsecond', due: '2026-01-02' });
 console.log('todoLine ok');
