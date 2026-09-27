@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
-import { memoryDb } from '@/lib/memoryDb';
 
 export async function PATCH(
   request: Request,
@@ -41,12 +40,8 @@ export async function PATCH(
 
     return NextResponse.json(updatedTask);
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for PATCH /api/tasks/[id]');
-    const updated = memoryDb.toggleTask(id, isCompleted);
-    if (!updated) {
-      return NextResponse.json({ error: 'Task not found in-memory' }, { status: 404 });
-    }
-    return NextResponse.json(updated);
+    console.error('Database error in PATCH /api/tasks/[id]:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
 
@@ -76,11 +71,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Task deleted successfully' });
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for DELETE /api/tasks/[id]');
-    const success = memoryDb.deleteTask(id);
-    if (!success) {
-      return NextResponse.json({ error: 'Task not found in-memory' }, { status: 404 });
-    }
-    return NextResponse.json({ success: true, message: 'Task deleted successfully in-memory' });
+    console.error('Database error in DELETE /api/tasks/[id]:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }

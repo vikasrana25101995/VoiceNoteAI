@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
-import { memoryDb } from '@/lib/memoryDb';
 
 export async function GET(
   request: Request,
@@ -29,12 +28,8 @@ export async function GET(
 
     return NextResponse.json(note);
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for GET /api/notes/[id]');
-    const fallbackNote = memoryDb.getNoteDetail(id);
-    if (!fallbackNote) {
-      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
-    }
-    return NextResponse.json(fallbackNote);
+    console.error('Database error in GET /api/notes/[id]:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
 
@@ -83,21 +78,8 @@ export async function PATCH(
 
     return NextResponse.json(updatedNote);
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for PATCH /api/notes/[id]');
-    const updated = memoryDb.updateNote(id, {
-      title,
-      content,
-      summary,
-      bulletPoints,
-      actionItems,
-      todos,
-      tags,
-      folderId,
-    });
-    if (!updated) {
-      return NextResponse.json({ error: 'Note not found in-memory' }, { status: 404 });
-    }
-    return NextResponse.json(updated);
+    console.error('Database error in PATCH /api/notes/[id]:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
 
@@ -127,11 +109,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Note deleted successfully' });
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for DELETE /api/notes/[id]');
-    const success = memoryDb.deleteNote(id);
-    if (!success) {
-      return NextResponse.json({ error: 'Note not found in-memory' }, { status: 404 });
-    }
-    return NextResponse.json({ success: true, message: 'Note deleted successfully in-memory' });
+    console.error('Database error in DELETE /api/notes/[id]:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { chatWithNotes } from '@/lib/ai';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
-import { memoryDb } from '@/lib/memoryDb';
 
 export async function POST(request: Request) {
   const customOpenAIKey = request.headers.get('x-openai-api-key') || undefined;
@@ -82,28 +81,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ response: aiResponse });
 
   } catch (error: any) {
-    console.warn('[Database Offline] Falling back to in-memory store for POST /api/chat');
-    
-    if (noteId) {
-      const note = memoryDb.getNoteDetail(noteId);
-      if (note) {
-        notesContext = [{ title: note.title, content: note.content, summary: note.summary ?? null }];
-      }
-    } else {
-      notesContext = memoryDb.getNotes().map(n => ({
-        title: n.title,
-        content: n.content,
-        summary: n.summary ?? null,
-      }));
-    }
-
-    if (notesContext.length === 0) {
-      return NextResponse.json({
-        response: "You don't have any notes yet! Record some notes first, and then I'll be happy to help answer questions about them.",
-      });
-    }
-
-    const aiResponse = await chatWithNotes(query, notesContext, customOpenAIKey, customGeminiKey);
-    return NextResponse.json({ response: aiResponse });
+    console.error('Database error in POST /api/chat:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }

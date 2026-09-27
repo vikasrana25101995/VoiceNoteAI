@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
-import { memoryDb } from '@/lib/memoryDb';
 
 export async function GET() {
   try {
@@ -24,9 +23,8 @@ export async function GET() {
 
     return NextResponse.json(folders);
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for GET /api/folders');
-    const fallbackFolders = memoryDb.getFolders();
-    return NextResponse.json(fallbackFolders);
+    console.error('Database error in GET /api/folders:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
 
@@ -67,8 +65,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(folder, { status: 201 });
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for POST /api/folders');
-    const fallbackFolder = memoryDb.createFolder(name, color);
-    return NextResponse.json(fallbackFolder, { status: 201 });
+    console.error('Database error in POST /api/folders:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }

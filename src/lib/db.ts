@@ -10,6 +10,9 @@ const globalForPrisma = global as unknown as {
 let prisma: PrismaClient;
 
 const databaseUrl = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/voicenote_ai';
+if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+  console.error('DATABASE_URL is not set; database queries will fail.');
+}
 
 if (process.env.NODE_ENV === 'production') {
   const pool = new pg.Pool({ connectionString: databaseUrl });

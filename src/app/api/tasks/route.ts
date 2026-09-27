@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
-import { memoryDb } from '@/lib/memoryDb';
 
 export async function GET() {
   try {
@@ -26,9 +25,8 @@ export async function GET() {
 
     return NextResponse.json(tasks);
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for GET /api/tasks');
-    const fallbackTasks = memoryDb.getTasks();
-    return NextResponse.json(fallbackTasks);
+    console.error('Database error in GET /api/tasks:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
 
@@ -60,14 +58,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {
-    console.warn('[Database Offline] Falling back to in-memory store for POST /api/tasks');
-    const newTask = memoryDb.createTask(content, noteId || 'note-1', dueDate ? new Date() : undefined);
-    if (assignee) {
-      newTask.assignee = assignee;
-    }
-    if (dueDate) {
-      newTask.dueDate = dueDate;
-    }
-    return NextResponse.json(newTask, { status: 201 });
+    console.error('Database error in POST /api/tasks:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }

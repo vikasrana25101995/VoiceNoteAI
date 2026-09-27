@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { analyzeTranscript } from '@/lib/ai';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
-import { memoryDb } from '@/lib/memoryDb';
 
 export async function POST(request: Request) {
   let body;
@@ -95,42 +94,7 @@ export async function POST(request: Request) {
     }, { status: 201 });
 
   } catch (error: any) {
-    console.warn('[Database Offline] Falling back to in-memory store for POST /api/analyze');
-    
-    // In-memory folder creation
-    let folderId = null;
-    if (analysis.category) {
-      const folder = memoryDb.createFolder(analysis.category);
-      folderId = folder.id;
-    }
-
-    // In-memory note creation
-    const note = memoryDb.createNote({
-      title: analysis.title,
-      content: transcript,
-      summary: analysis.summary,
-      bulletPoints: analysis.bulletPoints.join('\n'),
-      actionItems: analysis.actionItems.join('\n'),
-      tags: analysis.tags,
-      duration: duration || null,
-      audioUrl: audioUrl || null,
-      folderId: folderId,
-    });
-
-    // In-memory tasks creation
-    const createdTasks = [];
-    if (analysis.tasks && analysis.tasks.length > 0) {
-      for (const task of analysis.tasks) {
-        const newTask = memoryDb.createTask(task.content, note.id, task.dueDate);
-        createdTasks.push(newTask);
-      }
-    }
-
-    return NextResponse.json({
-      note,
-      tasks: createdTasks,
-      folderId,
-      category: analysis.category,
-    }, { status: 201 });
+    console.error('Database error in POST /api/analyze:', error);
+    return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
 }
