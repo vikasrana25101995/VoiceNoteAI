@@ -36,12 +36,6 @@ export function LoginModule() {
               </div>
               <span className="font-semibold text-lg text-neutral-900">VoiceNote AI</span>
             </div>
-            <Link
-              href="/signup"
-              className="text-sm font-medium text-[#234B36] hover:underline"
-            >
-              Create account
-            </Link>
           </div>
 
           {/* Heading */}
@@ -190,19 +184,6 @@ export function LoginModule() {
               )}
             </button>
           </form>
-
-          {/* Create Account Link */}
-          <div className="text-center pt-2">
-            <span className="text-neutral-500 text-sm">
-              {LOGIN_CONSTANTS.NEW_HERE_TEXT}{' '}
-            </span>
-            <Link
-              href="/signup"
-              className="text-sm font-semibold text-[#234B36] hover:underline"
-            >
-              {LOGIN_CONSTANTS.CREATE_ACCOUNT_LINK}
-            </Link>
-          </div>
 
           {/* Footer Notice */}
           <p className="text-center text-xs text-neutral-400 pt-4 leading-relaxed max-w-xs mx-auto">

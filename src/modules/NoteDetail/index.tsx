@@ -133,7 +133,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
   if (!noteId) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-neutral-400 p-8 text-center bg-white rounded-2xl border border-neutral-200 shadow-xs">
+      <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400 p-8 text-center bg-white rounded-2xl border border-neutral-200 shadow-xs">
         <FileText className="w-12 h-12 mb-3 stroke-[1.5] text-neutral-300" />
         <h4 className="font-bold text-neutral-600 text-lg">No Note Selected</h4>
         <p className="text-sm max-w-xs mt-1 text-neutral-400">Select a note from the list to view and edit.</p>
@@ -143,7 +143,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-neutral-500 bg-white rounded-2xl border border-neutral-200">
+      <div className="w-full h-full flex flex-col items-center justify-center text-neutral-500 bg-white rounded-2xl border border-neutral-200">
         <Loader2 className="w-8 h-8 animate-spin text-[#234B36] mb-2" />
         <span className="text-sm font-semibold">Loading note...</span>
       </div>

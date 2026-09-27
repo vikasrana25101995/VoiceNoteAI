@@ -1,15 +1,6 @@
-import { Suspense } from 'react';
-import SignupModule from '@/modules/Auth/Signup';
+import { redirect } from 'next/navigation';
 
-export const metadata = {
-  title: 'Create Account - VoiceNote AI',
-  description: 'Create your account to start converting voice notes into clean editable text with VoiceNote AI.',
-};
-
+// Signups are closed for now; restore the SignupModule page (see git history) to reopen.
 export default function SignupPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#FAFAF8]" />}>
-      <SignupModule />
-    </Suspense>
-  );
+  redirect('/login');
 }
