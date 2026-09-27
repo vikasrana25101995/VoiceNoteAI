@@ -36,6 +36,20 @@ import { noteDetailService } from './CORE/services';
 import { usePrompt } from '@/components/usePrompt';
 import { parseTodoLine, formatTodoLine, todayISO, formatDue, type TodoLine } from './CORE/todoLine';
 
+// Grow a textarea to fit its wrapped text (to-dos are stored one per line, so no real newlines).
+// ponytail: doesn't re-measure on window resize; add a ResizeObserver if that matters.
+const autoGrow = (el: HTMLTextAreaElement | null) => {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+};
+const blurOnEnter = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    e.currentTarget.blur();
+  }
+};
+
 interface NoteDetailProps {
   noteId: string | null;
   onClose?: () => void;
@@ -701,13 +715,28 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
 
                         const isHeading = /^(#{1,6}\s|\[heading\]|\[section\])/i.test(line.trim());
                         if (isHeading) {
-                          const cleanHeading = line.replace(/^(#{1,6}\s|\[heading\]|\[section\])\s*/i, '').trim();
+                          const cleanHeading = line.replace(/^(#{1,6}\s|\[heading\]|\[section\])\s*/i, '');
                           return (
-                            <div key={idx} className="flex items-center gap-3 pt-6 pb-2 border-b border-neutral-200/40 group">
-                              <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 font-sans">
-                                {cleanHeading}
-                              </span>
-                              <div className="flex-1 h-[1px] bg-neutral-200/40" />
+                            <div key={idx} className="flex items-start gap-3 pt-6 pb-2 border-b border-neutral-200/40 group">
+                              <textarea
+                                ref={autoGrow}
+                                rows={1}
+                                value={cleanHeading}
+                                onChange={(e) => {
+                                  autoGrow(e.currentTarget);
+                                  const lines = (todoContent || '').split('\n');
+                                  lines[idx] = `## ${e.target.value.replace(/\n/g, ' ')}`;
+                                  setTodoContent(lines.join('\n'));
+                                }}
+                                onKeyDown={blurOnEnter}
+                                onBlur={() => {
+                                  const lines = (todoContent || '').split('\n');
+                                  if (!cleanHeading.trim()) lines.splice(idx, 1);
+                                  saveTodos(lines.join('\n'));
+                                }}
+                                aria-label="Section heading"
+                                className="flex-1 resize-none overflow-hidden bg-transparent text-xs font-bold uppercase tracking-wider text-neutral-400 font-sans focus:outline-none focus:text-neutral-600 border-none p-0"
+                              />
                               <button
                                 type="button"
                                 onClick={() => {
@@ -737,13 +766,13 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                         return (
                           <div
                             key={idx}
-                            className="flex items-center justify-between gap-3 py-1.5 group"
+                            className="flex items-start justify-between gap-3 py-1.5 group"
                           >
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
                               <button
                                 type="button"
                                 onClick={() => updateTodo({ checked: !isChecked })}
-                                className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                                className={`w-5 h-5 mt-0.5 rounded-md border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
                                   isChecked
                                     ? 'bg-[#234B36] border-[#234B36] text-white'
                                     : 'border-neutral-300 bg-white hover:border-neutral-400'
@@ -752,12 +781,17 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                                 {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                               </button>
 
-                              <input
-                                type="text"
+                              <textarea
+                                ref={autoGrow}
+                                rows={1}
                                 value={todo.text}
-                                onChange={(e) => updateTodo({ text: e.target.value }, false)}
+                                onChange={(e) => {
+                                  autoGrow(e.currentTarget);
+                                  updateTodo({ text: e.target.value.replace(/\n/g, ' ') }, false);
+                                }}
+                                onKeyDown={blurOnEnter}
                                 onBlur={() => saveTodos(todoContent)}
-                                className={`w-full bg-transparent text-base font-sans focus:outline-none border-none ${
+                                className={`w-full resize-none overflow-hidden bg-transparent text-base leading-6 font-sans focus:outline-none border-none p-0 ${
                                   isChecked ? 'line-through text-neutral-400' : 'text-neutral-800 font-normal'
                                 }`}
                               />
