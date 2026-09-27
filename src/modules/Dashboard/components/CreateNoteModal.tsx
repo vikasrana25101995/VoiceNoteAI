@@ -79,7 +79,8 @@ export default function CreateNoteModal({
         });
 
         if (!res.ok) {
-          throw new Error('Failed to analyze typed note.');
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to analyze typed note.');
         }
 
         const data = await res.json();

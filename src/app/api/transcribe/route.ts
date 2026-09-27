@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { transcribeAudio } from '@/lib/ai';
+import { transcribeAudio, AIError } from '@/lib/ai';
 import fs from 'fs';
 import path from 'path';
 
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     console.error('Transcription API error:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to transcribe audio' },
-      { status: 500 }
+      { status: error instanceof AIError ? error.status : 500 }
     );
   }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { analyzeTranscript } from '@/lib/ai';
+import { analyzeTranscript, AIError } from '@/lib/ai';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
 
@@ -17,10 +17,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Transcript is required' }, { status: 400 });
   }
 
-  // 1. Analyze transcript using AI (GPT or mock)
+  // 1. Analyze transcript using AI
   const customOpenAIKey = request.headers.get('x-openai-api-key') || undefined;
   const customGeminiKey = request.headers.get('x-gemini-api-key') || undefined;
-  const analysis = await analyzeTranscript(transcript, customOpenAIKey, customGeminiKey);
+  let analysis;
+  try {
+    analysis = await analyzeTranscript(transcript, customOpenAIKey, customGeminiKey);
+  } catch (error) {
+    const status = error instanceof AIError ? error.status : 500;
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'AI analysis failed' }, { status });
+  }
 
   try {
     const user = await requireUser();

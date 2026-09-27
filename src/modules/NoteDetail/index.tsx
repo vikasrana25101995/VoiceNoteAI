@@ -253,7 +253,11 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
             });
 
             const data = await res.json();
-            const transcribedText = data.text || 'Recorded audio note.';
+            if (!res.ok) {
+              alert(data.error || 'Failed to transcribe audio.');
+              return;
+            }
+            const transcribedText = data.text;
             const newContent = (editedContent ? editedContent + '\n\n' : '') + transcribedText;
             setEditedContent(newContent);
             await noteDetailService.updateNote(note.id, { content: newContent });
@@ -328,7 +332,10 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
         body: JSON.stringify({ transcript: textToAnalyze }),
       });
 
-      if (res.ok) {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to extract to-dos.');
+      } else {
         const data = await res.json();
         if (data.actionItems && Array.isArray(data.actionItems)) {
           const formattedActions = data.actionItems.join('\n');
@@ -420,11 +427,15 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
     setIsAiThinking(true);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const openAIKey = localStorage.getItem('openai_api_key');
+      if (openAIKey) headers['x-openai-api-key'] = openAIKey;
+      const geminiKey = localStorage.getItem('gemini_api_key');
+      if (geminiKey) headers['x-gemini-api-key'] = geminiKey;
+
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           noteId: note.id,
           query: userQuery,
@@ -432,7 +443,7 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
       });
 
       const data = await res.json();
-      const aiResponse = data.response || 'I have analyzed your note regarding this query.';
+      const aiResponse = res.ok ? data.response : data.error || 'Failed to get a response.';
 
       const aiMessage: ChatMessageItem = {
         id: (Date.now() + 1).toString(),

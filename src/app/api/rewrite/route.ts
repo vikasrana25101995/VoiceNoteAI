@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
 import OpenAI from 'openai';
+import { AI_KEY_MISSING } from '@/lib/ai';
 
 async function rewriteWithGemini(noteContent: string, prompt: string, apiKey: string) {
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     const apiKey = customApiKey || process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
-      return NextResponse.json({ error: 'OpenAI API Key not found. Please add your key in the Settings panel (at the bottom left of the sidebar).' }, { status: 400 });
+      return NextResponse.json({ error: AI_KEY_MISSING }, { status: 503 });
     }
 
     let rewrittenText = '';

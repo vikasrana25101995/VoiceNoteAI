@@ -10,6 +10,18 @@ interface AIAnalysisResult {
   tasks: Array<{ content: string; dueDate?: Date }>;
 }
 
+export const AI_KEY_MISSING =
+  'AI is not set up. Set GEMINI_API_KEY or OPENAI_API_KEY on the server, or add your own key in Settings.';
+
+// Thrown by every AI helper; routes return error.message with error.status (503 = no key, 502 = provider failed).
+export class AIError extends Error {
+  constructor(message: string, public status = 502) {
+    super(message);
+  }
+}
+
+const errorText = (error: unknown) => (error instanceof Error ? error.message : 'no result returned');
+
 const getOpenAIClient = (customApiKey?: string) => {
   const apiKey = customApiKey || process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -28,7 +40,7 @@ async function generateGeminiContent(
 ): Promise<string> {
   const apiKey = getGeminiApiKey(customApiKey);
   if (!apiKey) {
-    throw new Error('Google Gemini API Key not found. Please add your key in the Settings panel (at the bottom left of the sidebar).');
+    throw new AIError(AI_KEY_MISSING, 503);
   }
 
   let response = await fetch(
@@ -60,7 +72,7 @@ async function generateGeminiContent(
     } catch {
       // response wasn't JSON; ignore
     }
-    throw new Error(`Gemini API request failed (${response.status})${detail ? `: ${detail}` : '.'}`);
+    throw new AIError(`Gemini API request failed (${response.status})${detail ? `: ${detail}` : '.'}`);
   }
 
   const data = await response.json();
@@ -72,6 +84,10 @@ async function generateGeminiContent(
  */
 export async function transcribeAudio(audioBuffer: Buffer, mimeType: string, customOpenAIKey?: string, customGeminiKey?: string): Promise<string> {
   const geminiKey = getGeminiApiKey(customGeminiKey);
+  const openai = getOpenAIClient(customOpenAIKey);
+  if (!geminiKey && !openai) throw new AIError(AI_KEY_MISSING, 503);
+  let lastError: unknown;
+
   if (geminiKey) {
     try {
       return await generateGeminiContent([
@@ -85,10 +101,10 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType: string, cus
       ], geminiKey);
     } catch (error) {
       console.error('Error in Gemini transcription:', error);
+      lastError = error;
     }
   }
 
-  const openai = getOpenAIClient(customOpenAIKey);
   if (openai) {
     try {
       let filename = 'recording.webm';
@@ -110,12 +126,11 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType: string, cus
       }
     } catch (error) {
       console.error('Error in Whisper transcription:', error);
+      lastError = error;
     }
   }
 
-  // Graceful fallback when no AI key is configured or API calls fail
-  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return `Recorded audio note (${timestamp}): Team discussion on priorities, product updates, and key action items.`;
+  throw new AIError(`Transcription failed: ${errorText(lastError)}`);
 }
 
 /**
@@ -123,6 +138,9 @@ export async function transcribeAudio(audioBuffer: Buffer, mimeType: string, cus
  */
 export async function analyzeTranscript(text: string, customOpenAIKey?: string, customGeminiKey?: string): Promise<AIAnalysisResult> {
   const geminiKey = getGeminiApiKey(customGeminiKey);
+  const openai = getOpenAIClient(customOpenAIKey);
+  if (!geminiKey && !openai) throw new AIError(AI_KEY_MISSING, 503);
+  let lastError: unknown;
   const prompt = `
 You are an expert AI productivity assistant. Analyze the following transcript text and extract:
 1. A concise, professional title.
@@ -154,10 +172,9 @@ Transcript:
       };
     } catch (error) {
       console.error('Error in Gemini analysis:', error);
+      lastError = error;
     }
   }
-
-  const openai = getOpenAIClient(customOpenAIKey);
 
   if (openai) {
     try {
@@ -184,32 +201,11 @@ Transcript:
       };
     } catch (error) {
       console.error('Error in OpenAI GPT analysis:', error);
+      lastError = error;
     }
   }
 
-  // Smart Heuristic Fallback when AI API keys are not provided
-  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
-  const cleanTitle = sentences[0] ? sentences[0].slice(0, 45).replace(/[\r\n]+/g, ' ').trim() : 'New Note';
-  const summaryText = sentences.slice(0, 3).join(' ') || text.slice(0, 150);
-  const bulletPointsList = sentences.slice(0, 4).map((s) => `• ${s.replace(/^[•\-\*]\s*/, '').trim()}`);
-  const actionItemsList = sentences
-    .filter((s) => /to-do|todo|will|need|must|should|action|plan|open|pull|hold|assign|review|schedule/i.test(s))
-    .map((s) => s.replace(/^[•\-\*]\s*/, '').trim())
-    .slice(0, 5);
-
-  if (actionItemsList.length === 0 && sentences.length > 0) {
-    actionItemsList.push(sentences[0].replace(/^[•\-\*]\s*/, '').trim());
-  }
-
-  return {
-    title: cleanTitle || 'Voice Note',
-    summary: summaryText,
-    bulletPoints: bulletPointsList,
-    actionItems: actionItemsList,
-    category: 'Work',
-    tags: ['VoiceNote'],
-    tasks: actionItemsList.map((item) => ({ content: item })),
-  };
+  throw new AIError(`AI analysis failed: ${errorText(lastError)}`);
 }
 
 /**
@@ -222,6 +218,8 @@ export async function chatWithNotes(
   customGeminiKey?: string
 ): Promise<string> {
   const geminiKey = getGeminiApiKey(customGeminiKey);
+  const openai = getOpenAIClient(customOpenAIKey);
+  if (!geminiKey && !openai) throw new AIError(AI_KEY_MISSING, 503);
 
   if (geminiKey) {
     const contextString = notesContext
@@ -231,13 +229,8 @@ export async function chatWithNotes(
       return await generateGeminiContent([{ role: 'user', parts: [{ text: `Answer the user's question based only on these notes. Be concise and professional.\n\nNotes:\n${contextString}\n\nUser Query: "${query}"` }] }], geminiKey);
     } catch (error) {
       console.error('Error in Gemini Chat:', error);
-      throw new Error(`Failed to communicate with Gemini chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new AIError(`Failed to communicate with Gemini chat: ${errorText(error)}`);
     }
-  }
-
-  const openai = getOpenAIClient(customOpenAIKey);
-  if (!openai) {
-    throw new Error('OpenAI API Key not found. Please add your key in the Settings panel (at the bottom left of the sidebar).');
   }
 
   try {
@@ -257,7 +250,7 @@ User Query: "${query}"
 Answer the user's question accurately based ONLY on the notes context provided. If the information is not in the notes, explain that you couldn't find it. Keep the tone helpful, concise, and professional.
 `;
 
-    const response = await openai.chat.completions.create({
+    const response = await openai!.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
     });
@@ -265,6 +258,6 @@ Answer the user's question accurately based ONLY on the notes context provided. 
     return response.choices[0]?.message?.content || 'Sorry, I could not generate an answer.';
   } catch (error) {
     console.error('Error in OpenAI Chat:', error);
-    throw new Error('Failed to communicate with AI chat.');
+    throw new AIError(`Failed to communicate with AI chat: ${errorText(error)}`);
   }
 }

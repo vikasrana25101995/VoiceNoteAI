@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { chatWithNotes } from '@/lib/ai';
+import { chatWithNotes, AIError } from '@/lib/ai';
 import { prisma } from '@/lib/db';
 import { requireUser } from '@/lib/user';
 
@@ -81,6 +81,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ response: aiResponse });
 
   } catch (error: any) {
+    if (error instanceof AIError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error('Database error in POST /api/chat:', error);
     return NextResponse.json({ error: 'Database error' }, { status: 500 });
   }
