@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types src/modules/NoteDetail/CORE/todoLine.check.ts
 import assert from 'node:assert/strict';
-import { parseTodoLine, formatTodoLine } from './todoLine.ts';
+import { parseTodoLine, formatTodoLine, importTodos } from './todoLine.ts';
 
 assert.deepEqual(parseTodoLine('- [ ] Send invoice @due(2026-10-03)'), { checked: false, text: 'Send invoice', due: '2026-10-03' });
 assert.deepEqual(parseTodoLine('- [x] Call vendor'), { checked: true, text: 'Call vendor', due: '' });
@@ -12,4 +12,9 @@ for (const line of ['- [ ] a @due(2026-01-02)', '- [x] b', '- [ ] email me@due.c
 const multi = formatTodoLine({ checked: false, text: 'first\nsecond', due: '2026-01-02' });
 assert.ok(!multi.includes('\n'));
 assert.deepEqual(parseTodoLine(multi), { checked: false, text: 'first\nsecond', due: '2026-01-02' });
+// Import from pasted text or JSON
+assert.deepEqual(importTodos('# Groceries\n1. milk\n- [x] eggs\n\n• bread'), ['## Groceries', '- [ ] milk', '- [x] eggs', '- [ ] bread']);
+assert.deepEqual(importTodos('["a", {"text": "b", "done": true, "due": "2026-01-02"}]'), ['- [ ] a', '- [x] b @due(2026-01-02)']);
+assert.deepEqual(importTodos('{"title": "Trip", "tasks": [{"task": "pack"}]}'), ['## Trip', '- [ ] pack']);
+assert.deepEqual(importTodos('{"Work": ["email"], "Home": ["dishes"]}'), ['## Work', '- [ ] email', '## Home', '- [ ] dishes']);
 console.log('todoLine ok');

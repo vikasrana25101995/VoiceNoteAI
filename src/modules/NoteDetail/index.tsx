@@ -34,7 +34,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { noteDetailService } from './CORE/services';
 import { usePrompt } from '@/components/usePrompt';
-import { parseTodoLine, formatTodoLine, todayISO, formatDue, type TodoLine } from './CORE/todoLine';
+import { parseTodoLine, formatTodoLine, todayISO, formatDue, importTodos, type TodoLine } from './CORE/todoLine';
 
 // Grow a textarea to fit its text as it wraps or gains Shift+Enter line breaks.
 // ponytail: doesn't re-measure on window resize; add a ResizeObserver if that matters.
@@ -498,6 +498,19 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
     saveTodos(lines.join('\n'));
   };
 
+  const handleImportTodos = async () => {
+    const input = await ask({
+      title: 'Import to-dos',
+      description: 'Paste a list (one item per line, "#" for headings) or JSON, e.g. ["Buy milk", {"text": "Call vendor", "done": true, "due": "2026-10-03"}].',
+      placeholder: '# Groceries\n- milk\n- eggs',
+      confirmLabel: 'Import',
+      multiline: true,
+    });
+    if (!input) return;
+    const lines = [...(todoContent || '').split('\n').filter(Boolean), ...importTodos(input)];
+    saveTodos(lines.join('\n'));
+  };
+
   return (
     <div className="w-full h-full flex flex-col bg-white border border-neutral-200/80 rounded-2xl overflow-hidden shadow-xs text-neutral-900">
       {promptDialog}
@@ -902,6 +915,15 @@ export default function NoteDetail({ noteId, onClose, onNoteUpdated, onDeleteNot
                       className="px-5 py-2.5 bg-[#234B36] text-white text-sm font-medium rounded-xl hover:bg-[#1A3A2A] transition-colors cursor-pointer shadow-2xs"
                     >
                       Add
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleImportTodos}
+                      title="Import from text or JSON"
+                      className="px-4 py-2.5 bg-white border border-neutral-200 text-sm font-medium text-[#234B36] rounded-xl hover:bg-neutral-50 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      Import
                     </button>
                   </div>
                 </div>

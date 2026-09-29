@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 
 interface PromptOptions {
@@ -12,6 +13,7 @@ interface PromptOptions {
   confirmLabel?: string;
   destructive?: boolean; // red confirm button, e.g. for deletes
   confirmOnly?: boolean; // no text field; used by confirm()
+  multiline?: boolean; // textarea instead of a single-line input
 }
 
 // Styled, promise-based replacements for window.prompt() and window.confirm():
@@ -64,7 +66,15 @@ export function usePrompt() {
             )}
           </DialogHeader>
 
-          {!options.confirmOnly && (
+          {options.multiline ? (
+            <Textarea
+              autoFocus
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={options.placeholder}
+              className="min-h-40 max-h-80 font-mono text-xs bg-white border-neutral-200 text-neutral-900 placeholder:text-neutral-400 rounded-xl shadow-2xs focus-visible:ring-1 focus-visible:ring-[#234B36] focus-visible:border-[#234B36]"
+            />
+          ) : !options.confirmOnly && (
             <Input
               autoFocus
               value={value}
